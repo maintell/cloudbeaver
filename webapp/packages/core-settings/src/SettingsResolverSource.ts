@@ -15,41 +15,52 @@ import type { ISettingChangeData, ISettingsSource } from './ISettingsSource.js';
 import type { ISettingsLayer } from './SettingsLayer.js';
 import { isEditableSettingsSource, type IEditableSettingsSource } from './IEditableSettingsSource.js';
 
-type SettingsSource = ISettingsSource | IEditableSettingsSource;
+type SettingsSourceUnion = ISettingsSource | IEditableSettingsSource;
 
 interface ISettingsSourcesLayer {
   layer: ISettingsLayer;
-  sources: SettingsSource[];
+  sources: SettingsSourceUnion[];
 }
 
 export class SettingsResolverSource implements ISettingsResolverSource {
   readonly onChange: ISyncExecutor<ISettingChangeData>;
-  protected get sources(): SettingsSource[] {
-    return this.layers
+  protected get sources(): SettingsSourceUnion[] {
+    return [...this.layers, ...this.resolvers.map(r => r.layers).flat()]
       .slice()
       .sort((a, b) => a.layer.level - b.layer.level)
       .flatMap(layer => layer.sources)
       .reverse();
   }
   protected layers: ISettingsSourcesLayer[];
+  protected resolvers: SettingsResolverSource[];
   private updating: boolean;
 
   constructor() {
     this.onChange = new SyncExecutor();
     this.layers = [];
+    this.resolvers = [];
     this.updating = false;
-    makeObservable<this, 'layers' | 'sources' | 'update'>(this, {
+    makeObservable<this, 'layers' | 'sources' | 'update' | 'resolvers'>(this, {
       layers: observable.shallow,
       sources: computed,
       update: action,
+      resolvers: observable.shallow,
     });
   }
 
-  hasResolver(layer: ISettingsLayer, resolver: SettingsSource): boolean {
+  add(...resolvers: SettingsResolverSource[]): this {
+    this.resolvers.push(...resolvers);
+    for (const resolver of resolvers) {
+      resolver.onChange.next(this.onChange, data => ({ ...data, value: this.getValue(data.key) }));
+    }
+    return this;
+  }
+
+  hasResolver(layer: ISettingsLayer, resolver: SettingsSourceUnion): boolean {
     return this.tryGetLayerSources(layer)?.sources.includes(resolver) || false;
   }
 
-  removeResolver(layer: ISettingsLayer, resolver: SettingsSource): void {
+  removeResolver(layer: ISettingsLayer, resolver: SettingsSourceUnion): void {
     const layerSources = this.getLayerSources(layer);
 
     const index = layerSources.sources.indexOf(resolver);
@@ -60,7 +71,7 @@ export class SettingsResolverSource implements ISettingsResolverSource {
     }
   }
 
-  addResolver(layer: ISettingsLayer, ...resolvers: SettingsSource[]): void {
+  addResolver(layer: ISettingsLayer, ...resolvers: SettingsSourceUnion[]): void {
     if (resolvers.some(this.hasResolver.bind(this, layer))) {
       return;
     }
@@ -72,12 +83,7 @@ export class SettingsResolverSource implements ISettingsResolverSource {
     for (const resolver of resolvers) {
       resolver.onChange.next(
         this.onChange,
-        data => {
-          if (resolver.has(data.key)) {
-            return data;
-          }
-          return { ...data, value: this.getValue(data.key) };
-        },
+        data => ({ ...data, value: this.getValue(data.key) }),
         data => !resolver.has(data.key) || this.sources.find(r => r.has(data.key)) === resolver,
       );
     }
@@ -122,7 +128,22 @@ export class SettingsResolverSource implements ISettingsResolverSource {
 
   getEditedValue(key: any): any {
     const source = this.sources.filter(isEditableSettingsSource).find(r => r.has(key) && isNotNullDefined(r.getEditedValue(key)));
-    return source ? source.getEditedValue(key) : undefined;
+
+    if (source) {
+      return source.getEditedValue(key);
+    }
+
+    const fallbackSource = this.sources.find(r => {
+      if (!r.has(key)) {
+        return false;
+      }
+      if (isEditableSettingsSource(r)) {
+        return isNotNullDefined(r.getEditedValue(key));
+      }
+      return isNotNullDefined(r.getValue(key));
+    });
+
+    return fallbackSource ? fallbackSource.getValue(key) : undefined;
   }
 
   getValue(key: any): any {
@@ -133,7 +154,7 @@ export class SettingsResolverSource implements ISettingsResolverSource {
     for (const source of this.sources) {
       const readonly = !isEditableSettingsSource(source) || source.isReadOnly(key);
 
-      if (source.has(key) || readonly) {
+      if (source.has(key) && readonly) {
         throw new Error(`Can't set value for key ${key}`);
       }
 
@@ -147,12 +168,14 @@ export class SettingsResolverSource implements ISettingsResolverSource {
   resetValue(key: any): void {
     for (const source of this.sources) {
       const readonly = !isEditableSettingsSource(source) || source.isReadOnly(key);
-      if (source.has(key) || readonly) {
+      if (source.has(key) && readonly) {
         throw new Error(`Can't set value for key ${key}`);
       }
 
-      source.resetValue(key);
-      return;
+      if (!readonly) {
+        source.resetValue(key);
+        return;
+      }
     }
   }
 

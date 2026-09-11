@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/core-sdk",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "clean": "rimraf node_modules",
@@ -24,6 +26,7 @@
   "dependencies": {
     "@cloudbeaver/core-di": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
+    "@graphql-typed-document-node/core": "^3",
     "axios": "^1",
     "graphql": "^16",
     "graphql-request": "^7",
@@ -34,17 +37,17 @@
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
-    "@graphql-codegen/add": "^5",
-    "@graphql-codegen/cli": "^5",
-    "@graphql-codegen/near-operation-file-preset": "^3",
-    "@graphql-codegen/typescript": "^4",
+    "@graphql-codegen/add": "^6",
+    "@graphql-codegen/cli": "^6",
+    "@graphql-codegen/near-operation-file-preset": "^4",
+    "@graphql-codegen/typescript": "^5",
     "@graphql-codegen/typescript-graphql-files-modules": "^3",
     "@graphql-codegen/typescript-graphql-request": "^6",
-    "@graphql-codegen/typescript-operations": "^4",
-    "@graphql-typed-document-node/core": "^3",
+    "@graphql-codegen/typescript-operations": "^5",
     "@parcel/watcher": "^2",
     "graphql": "^16",
     "graphql-tag": "^2",
+    "rimraf": "^6",
     "typescript": "^5"
   }
 }

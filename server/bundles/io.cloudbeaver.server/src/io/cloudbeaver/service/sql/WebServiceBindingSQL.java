@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,10 +27,12 @@ import io.cloudbeaver.service.DBWServletContext;
 import io.cloudbeaver.service.WebServiceBindingBase;
 import io.cloudbeaver.service.sql.impl.WebServiceSQL;
 import org.jkiss.code.NotNull;
+import org.jkiss.code.NotNullWhen;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.utils.CommonUtils;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,58 +54,93 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
             .dataFetcher("sqlDialectInfo", env ->
                 getService(env).getDialectInfo(getWebConnection(env))
             )
+            .dataFetcher("sqlResultAssociations", env ->
+                getService(env).getSqlResultAssociations(
+                    getWebSession(env),
+                    getSQLContext(env),
+                    getArgumentVal(env, "resultsId"),
+                    getArgument(env, "isReference")
+                )
+            )
             .dataFetcher("sqlListContexts", env ->
                 getService(env).listContexts(getWebSession(env),
                     getProjectReference(env),
-                    env.getArgument("connectionId"),
-                    env.getArgument("contextId"))
+                    getArgument(env, "connectionId"),
+                    getArgument(env, "contextId"))
             )
             .dataFetcher("sqlCompletionProposals", env ->
                 getService(env).getCompletionProposals(
                     getSQLContext(env),
-                    env.getArgument("query"),
-                    env.getArgument("position"),
-                    env.getArgument("maxResults"),
-                    env.getArgument("simpleMode")
+                    getArgumentVal(env, "query"),
+                    getArgument(env, "position"),
+                    getArgument(env, "maxResults"),
+                    getArgument(env, "simpleMode")
                 )
             )
             .dataFetcher("sqlFormatQuery", env ->
                 getService(env).formatQuery(
                     getSQLContext(env),
-                    env.getArgument("query")
+                    getArgumentVal(env, "query")
                 )
             )
             .dataFetcher("sqlSupportedOperations", env ->
                 getService(env).getSupportedOperations(
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
-                    env.getArgument("attributeIndex"))
+                    getArgumentVal(env, "resultsId"),
+                    getArgumentVal(env, "attributeIndex"))
             )
             .dataFetcher("sqlEntityQueryGenerators", env ->
                 getService(env).getEntityQueryGenerators(
                     getWebSession(env),
-                    env.getArgument("nodePathList"))
+                    getArgumentVal(env, "nodePathList"))
             )
             .dataFetcher("sqlGenerateEntityQuery", env ->
                 getService(env).generateEntityQuery(
                     getWebSession(env),
-                    env.getArgument("generatorId"),
-                    env.getArgument("options"),
-                    env.getArgument("nodePathList"))
-            ).dataFetcher("sqlParseScript", env ->
-                getService(env).parseSqlScript(getWebConnection(env), env.getArgument("script"))
+                    getArgumentVal(env, "generatorId"),
+                    getArgumentVal(env, "nodePathList"),
+                    getGeneratorOptions(env)
+                )
+            )
+            .dataFetcher("sqlGenerateResultSetQuery", env ->
+                getService(env).sqlGenerateResultSetQuery(
+                    getWebSession(env),
+                    getSQLContext(env),
+                    getArgumentVal(env, "generatorId"),
+                    getArgumentVal(env, "resultsId"),
+                    getResultsRow(env, "selectedRows"),
+                    getGeneratorOptions(env)
+                )
+            )
+            .dataFetcher("sqlParseScript", env ->
+                getService(env).parseSqlScript(getWebConnection(env), getArgumentVal(env, "script"))
             ).dataFetcher("sqlParseQuery", env ->
                 getService(env).parseSqlQuery(
                     getWebConnection(env),
-                    env.getArgument("script"),
-                    env.getArgument("position"))
+                    getArgumentVal(env, "script"),
+                    getArgumentVal(env, "position"))
             ).dataFetcher("sqlGenerateGroupingQuery", env ->
             getService(env).generateGroupByQuery(
                 getSQLContext(env),
-                env.getArgument("resultsId"),
-                env.getArgument("columnNames"),
-                env.getArgument("functions"),
-                env.getArgument("showDuplicatesOnly"))
+                getArgumentVal(env, "resultsId"),
+                getArgumentVal(env, "columnNames"),
+                getArgument(env, "functions"),
+                getArgument(env, "showDuplicatesOnly"))
+            )
+            .dataFetcher(
+                "asyncSqlGroupingResultSet", env ->
+                    getService(env).getGroupingSqlResultSet(
+                        getWebSession(env),
+                        getSQLContext(env),
+                        getArgumentVal(env, "originalResultsId"),
+                        getArgument(env, "currentResultsId"),
+                        getArgumentVal(env, "columnNames"),
+                        getArgument(env, "functions"),
+                        getArgument(env, "showDuplicatesOnly"),
+                        getDataFilter(env),
+                        getDataFormat(env),
+                        CommonUtils.toBoolean(getArgument(env, "isInteractive"))
+                    )
             )
         ;
 
@@ -111,14 +148,14 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
             .dataFetcher("sqlContextCreate", env -> getService(env).createContext(
                 getSQLProcessor(env),
                 getProjectReference(env),
-                env.getArgument("defaultCatalog"),
-                env.getArgument("defaultSchema")))
+                getArgument(env, "defaultCatalog"),
+                getArgument(env, "defaultSchema")))
             .dataFetcher("sqlContextDestroy", env -> { getService(env).destroyContext(getSQLContext(env)); return true; } )
             .dataFetcher("sqlContextSetDefaults", env -> {
                 getService(env).setContextDefaults(
                     getSQLContext(env),
-                    env.getArgument("defaultCatalog"),
-                    env.getArgument("defaultSchema"));
+                    getArgument(env, "defaultCatalog"),
+                    getArgument(env, "defaultSchema"));
                 return true;
             })
 
@@ -130,36 +167,36 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
                     }
                     return getService(env).closeResult(
                         getSQLContext(env),
-                        env.getArgument("resultId"));
+                        getArgumentVal(env, "resultId"));
                 })
             .dataFetcher("readLobValue", env -> // deprecated
                 getService(env).readLobValue(
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
-                    env.getArgument("lobColumnIndex"),
-                    getResultsRow(env, "row").get(0)))
+                    getArgumentVal(env, "resultsId"),
+                    getArgumentVal(env, "lobColumnIndex"),
+                    getResultsRow(env, "row").getFirst()))
             .dataFetcher("sqlReadLobValue", env ->
                 getService(env).readLobValue(
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
-                    env.getArgument("lobColumnIndex"),
-                    new WebSQLResultsRow(env.getArgument("row"))))
+                    getArgumentVal(env, "resultsId"),
+                    getArgumentVal(env, "lobColumnIndex"),
+                    new WebSQLResultsRow(getArgument(env, "row"))))
             .dataFetcher("sqlReadStringValue", env ->
                 getService(env).getCellValue(
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
-                    env.getArgument("columnIndex"),
-                    new WebSQLResultsRow(env.getArgument("row"))))
+                    getArgumentVal(env, "resultsId"),
+                    getArgumentVal(env, "columnIndex"),
+                    new WebSQLResultsRow(getArgument(env, "row"))))
             .dataFetcher("sqlGetDynamicTrace", env ->
                 getService(env).readDynamicTrace(
                     getWebSession(env),
                     getSQLContext(env),
-                    env.getArgument("resultsId")
+                    getArgumentVal(env, "resultsId")
                 ))
             .dataFetcher("updateResultsDataBatch", env ->
                 getService(env).updateResultsDataBatch(
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
+                    getArgumentVal(env, "resultsId"),
                     getResultsRow(env, "updatedRows"),
                     getResultsRow(env, "deletedRows"),
                     getResultsRow(env, "addedRows"),
@@ -168,7 +205,7 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
                 getService(env).asyncUpdateResultsDataBatch(
                     getWebSession(env),
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
+                    getArgumentVal(env, "resultsId"),
                     getResultsRow(env, "updatedRows"),
                     getResultsRow(env, "deletedRows"),
                     getResultsRow(env, "addedRows"),
@@ -176,7 +213,7 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
             .dataFetcher("updateResultsDataBatchScript", env ->
                 getService(env).updateResultsDataBatchScript(
                     getSQLContext(env),
-                    env.getArgument("resultsId"),
+                    getArgumentVal(env, "resultsId"),
                     getResultsRow(env, "updatedRows"),
                     getResultsRow(env, "deletedRows"),
                     getResultsRow(env, "addedRows"),
@@ -184,51 +221,62 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
 
             .dataFetcher("asyncSqlExecuteQuery", env ->
                 getService(env).asyncExecuteQuery(
+                    getWebSession(env),
+                    getProjectReference(env),
                     getSQLContext(env),
-                    env.getArgument("sql"),
-                    env.getArgument("resultId"),
+                    getArgumentVal(env, "sql"),
+                    getArgument(env, "resultId"),
                     getDataFilter(env),
                     getDataFormat(env),
-                    CommonUtils.toBoolean(env.getArgument("readLogs")),
-                    getWebSession(env)))
+                    CommonUtils.toBoolean(getArgument(env, "readLogs")),
+                    CommonUtils.toBoolean(getArgument(env, "isInteractive"))
+                )
+            )
             .dataFetcher("asyncReadDataFromContainer", env ->
                 getService(env).asyncReadDataFromContainer(
                     getSQLContext(env),
-                    env.getArgument("containerNodePath"),
-                    env.getArgument("resultId"),
+                    getArgumentVal(env, "containerNodePath"),
+                    getArgument(env, "resultId"),
                     getDataFilter(env),
                     getDataFormat(env)
                 ))
             .dataFetcher("asyncSqlExecuteResults", env ->
                 getService(env).asyncGetQueryResults(
-                    getWebSession(env), env.getArgument("taskId")
+                    getWebSession(env), getArgumentVal(env, "taskId")
+                ))
+            .dataFetcher("asyncSqlGenerateEntityQuery", env ->
+                getService(env).asyncGenerateEntityQuery(
+                    getWebSession(env),
+                    getArgumentVal(env, "generatorId"),
+                    getArgumentVal(env, "nodePathList"),
+                    getGeneratorOptions(env)
                 ))
             .dataFetcher("asyncSqlExplainExecutionPlan", env ->
                 getService(env).asyncSqlExplainExecutionPlan(
                     getSQLContext(env),
-                    env.getArgument("query"),
-                    env.getArgument("configuration")
+                    getArgumentVal(env, "query"),
+                    getArgumentVal(env, "configuration")
                 ))
             .dataFetcher("asyncSqlExplainExecutionPlanResult", env ->
                 getService(env).asyncSqlExplainExecutionPlanResult(
-                    getWebSession(env), env.getArgument("taskId")
+                    getWebSession(env), getArgumentVal(env, "taskId")
                 ))
             .dataFetcher("asyncSqlRowDataCount", env ->
                 getService(env).getRowDataCount(
                     getWebSession(env),
                     getSQLContext(env),
-                    env.getArgument("resultsId")
+                    getArgumentVal(env, "resultsId")
                 ))
             .dataFetcher("asyncSqlRowDataCountResult", env ->
                 getService(env).getRowDataCountResult(
                     getWebSession(env),
-                    env.getArgument("taskId")
+                    getArgumentVal(env, "taskId")
             ))
             .dataFetcher("asyncSqlSetAutoCommit", env ->
                 getService(env).asyncSqlSetAutoCommit(
                     getWebSession(env),
                     getSQLContext(env),
-                    env.getArgument("autoCommit")
+                    getArgumentVal(env, "autoCommit")
             ))
             .dataFetcher("asyncSqlCommitTransaction", env ->
                 getService(env).asyncSqlCommitTransaction(
@@ -248,8 +296,8 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
     }
 
     @NotNull
-    private WebDataFormat getDataFormat(DataFetchingEnvironment env) {
-        String dataFormat = env.getArgument("dataFormat");
+    public static WebDataFormat getDataFormat(DataFetchingEnvironment env) {
+        String dataFormat = getArgument(env, "dataFormat");
         return CommonUtils.valueOf(WebDataFormat.class, dataFormat, WebDataFormat.resultset);
     }
 
@@ -272,10 +320,10 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
 
     @NotNull
     public static WebSQLProcessor getSQLProcessor(WebConnectionInfo connectionInfo) throws DBWebException {
-        return getSQLConfiguration(connectionInfo.getSession()).getSQLProcessor(connectionInfo);
+        return getSQLProcessor(connectionInfo, true);
     }
 
-    @Nullable
+    @NotNullWhen("connect")
     public static WebSQLProcessor getSQLProcessor(WebConnectionInfo connectionInfo, boolean connect) throws DBWebException {
         return getSQLConfiguration(connectionInfo.getSession()).getSQLProcessor(connectionInfo, connect);
     }
@@ -295,7 +343,7 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
         if (processor == null) {
             return null;
         }
-        String contextId = env.getArgument("contextId");
+        String contextId = getArgument(env, "contextId");
         return getSQLContext(processor, contextId);
     }
 
@@ -309,7 +357,7 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
     }
 
     @Override
-    public void addServlets(ServletApplication application, DBWServletContext servletContext) throws DBException {
+    public void addServlets(@NotNull ServletApplication application, @NotNull DBWServletContext servletContext) throws DBException {
         servletContext.addServlet(
             "sqlResultValueViewer",
             new WebSQLResultServlet(application, getServiceImpl()),
@@ -327,16 +375,13 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
         return application.isMultiuser();
     }
 
-    private static class WebSQLConfiguration {
+    public static class WebSQLConfiguration {
         private final Map<WebConnectionInfo, WebSQLProcessor> processors = new HashMap<>();
 
         public WebSQLConfiguration() {
         }
 
-        WebSQLProcessor getSQLProcessor(WebConnectionInfo connectionInfo) throws DBWebException {
-            return WebServiceBindingSQL.getSQLProcessor(connectionInfo, true);
-        }
-
+        @NotNullWhen("connect")
         WebSQLProcessor getSQLProcessor(WebConnectionInfo connectionInfo, boolean connect) throws DBWebException {
             if (connectionInfo.getDataSource() == null) {
                 if (!connect) {
@@ -359,6 +404,7 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
             }
         }
 
+        @NotNull
         public WebSQLConfiguration dispose() {
             synchronized (processors) {
                 processors.forEach((connectionInfo, processor) -> processor.dispose());
@@ -371,17 +417,32 @@ public class WebServiceBindingSQL extends WebServiceBindingBase<DBWServiceSQL>
     ///////////////////////////////////////
     // Helpers
 
-    private static WebSQLDataFilter getDataFilter(DataFetchingEnvironment env) {
-        Map<String, Object> filterProps = env.getArgument("filter");
+    @Nullable
+    public static WebSQLDataFilter getDataFilter(DataFetchingEnvironment env) {
+        Map<String, Object> filterProps = getArgument(env, "filter");
         return filterProps == null ? null : new WebSQLDataFilter(filterProps);
     }
 
+    @NotNull
     private static List<WebSQLResultsRow> getResultsRow(DataFetchingEnvironment env, String param) {
-        List<Map<String, Object>> mapList = env.getArgument(param);
+        List<Map<String, Object>> mapList = getArgument(env, param);
         if (CommonUtils.isEmpty(mapList)) {
-            return null;
+            return Collections.emptyList();
         }
         return mapList.stream().map(WebSQLResultsRow::new).collect(Collectors.toList());
+    }
+
+    @NotNull
+    private static WebSQLGeneratorOptions getGeneratorOptions(@NotNull DataFetchingEnvironment env) {
+        Map<String, Object> optionsMap = getArgument(env, "generatorOptions");
+        if (optionsMap == null) {
+            return new WebSQLGeneratorOptions(true, false, false);
+        }
+        return new WebSQLGeneratorOptions(
+            CommonUtils.toBoolean(optionsMap.get("useFullyQualifiedNames")),
+            CommonUtils.toBoolean(optionsMap.get("compactSql")),
+            CommonUtils.toBoolean(optionsMap.get("showFullDdl"))
+        );
     }
 
 }

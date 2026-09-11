@@ -3,15 +3,16 @@
   "type": "module",
   "sideEffects": [
     "./lib/index.js",
+    "./lib/module.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -20,12 +21,12 @@
     "validate-dependencies": "core-cli-validate-dependencies"
   },
   "dependencies": {
-    "@cloudbeaver/core-di": "workspace:*",
     "tslib": "^2"
   },
   "devDependencies": {
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
+    "rimraf": "^6",
     "typescript": "^5"
   }
 }

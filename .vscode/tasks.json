@@ -26,7 +26,17 @@
       "group": "test",
       "args": ["test"],
       "options": {
-        "cwd": "${workspaceFolder}/common-typescript"
+        "cwd": "${workspaceFolder}/webapp/common-typescript"
+      }
+    },
+    {
+      "label": "Run Tests Common React",
+      "type": "shell",
+      "command": "yarn",
+      "group": "test",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}/webapp/common-react"
       }
     },
     {
@@ -82,10 +92,10 @@
       "label": "Run Backend CE",
       "type": "shell",
       "windows": {
-        "command": "./run-server.bat"
+        "command": "./run-cloudbeaver-server.bat"
       },
       "osx": {
-        "command": "./run-server.sh"
+        "command": "./run-cloudbeaver-server.sh"
       },
       "options": {
         "cwd": "${workspaceFolder}/deploy/cloudbeaver"
@@ -123,9 +133,18 @@
       "type": "shell",
       "command": "yarn",
       "options": {
-        "cwd": "${workspaceFolder}/common-react/@dbeaver/ui-kit"
+        "cwd": "${workspaceFolder}/webapp/common-react/@dbeaver/ui-kit"
       },
       "args": ["docs"]
+    },
+    {
+      "label": "Run Storybook",
+      "type": "shell",
+      "command": "yarn",
+      "options": {
+        "cwd": "${workspaceFolder}/webapp/packages/storybook"
+      },
+      "args": ["storybook"]
     }
   ],
   "inputs": [

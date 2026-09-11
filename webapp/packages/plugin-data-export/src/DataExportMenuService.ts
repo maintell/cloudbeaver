@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@ import { injectable } from '@cloudbeaver/core-di';
 import { CommonDialogService } from '@cloudbeaver/core-dialogs';
 import { LocalizationService } from '@cloudbeaver/core-localization';
 import { DATA_CONTEXT_NAV_NODE, EObjectFeature } from '@cloudbeaver/core-navigation-tree';
-import { withTimestamp } from '@cloudbeaver/core-utils';
+import { withTimestamp } from '@dbeaver/js-helpers';
 import { ACTION_EXPORT, ActionService, menuExtractItems, MenuService } from '@cloudbeaver/core-view';
 import {
   DATA_CONTEXT_DV_DDM,
@@ -27,7 +27,7 @@ import type { IDataQueryOptions } from '@cloudbeaver/plugin-sql-editor';
 
 const DataExportDialog = importLazyComponent(() => import('./Dialog/DataExportDialog.js').then(module => module.DataExportDialog));
 
-@injectable()
+@injectable(() => [CommonDialogService, ActionService, MenuService, LocalizationService, DataViewerService, ConnectionInfoResource])
 export class DataExportMenuService {
   constructor(
     private readonly commonDialogService: CommonDialogService,
@@ -72,7 +72,7 @@ export class DataExportMenuService {
       },
       getActionInfo(context, action) {
         if (action === ACTION_EXPORT) {
-          return { ...action.info, icon: 'table-export' };
+          return { ...action.info, tooltip: 'data_transfer_dialog_export_tooltip', icon: 'table-export' };
         }
 
         return action.info;
@@ -104,6 +104,7 @@ export class DataExportMenuService {
             filter: {
               constraints: source.options.constraints,
               where: source.options.whereFilter,
+              anyConstraint: source.options.anyConstraint,
             },
           });
         }
@@ -139,7 +140,7 @@ export class DataExportMenuService {
           connectionKey,
           name: node.name,
           fileName,
-          containerNodePath: node.id,
+          containerNodePath: node.uri,
         });
       },
     });

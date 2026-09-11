@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,13 @@ import { ResultSetEditAction } from './DatabaseDataModel/Actions/ResultSet/Resul
 import type { IDatabaseDataOptions } from './DatabaseDataModel/IDatabaseDataOptions.js';
 import type { IDatabaseResultSet } from './DatabaseDataModel/IDatabaseResultSet.js';
 import { ResultSetDataSource } from './ResultSet/ResultSetDataSource.js';
+import { DatabaseDataFeature } from './DatabaseDataModel/IDatabaseDataSource.js';
 
 export interface IDataContainerOptions extends IDatabaseDataOptions {
   containerNodePath: string;
 }
 
-export class ContainerDataSource extends ResultSetDataSource<IDataContainerOptions> {
+export class ContainerDataSource<TOptions extends IDataContainerOptions = IDataContainerOptions> extends ResultSetDataSource<TOptions> {
   currentTask: ITask<SqlExecuteInfo> | null;
 
   override get canCancel(): boolean {
@@ -52,6 +53,7 @@ export class ContainerDataSource extends ResultSetDataSource<IDataContainerOptio
 
     this.currentTask = null;
     this.executionContext = null;
+    this.setFeature(DatabaseDataFeature.DataEditor);
 
     makeObservable(this, {
       currentTask: observable.ref,
@@ -89,7 +91,8 @@ export class ContainerDataSource extends ResultSetDataSource<IDataContainerOptio
       const response = await this.currentTask;
 
       this.requestInfo = {
-        originalQuery: response.fullQuery || '',
+        originalQuery: response.originalQuery || '',
+        fullQuery: response.fullQuery || '',
         requestDuration: response.duration || 0,
         requestMessage: response.statusMessage || '',
         requestFilter: response.filterText || '',
@@ -170,7 +173,7 @@ export class ContainerDataSource extends ResultSetDataSource<IDataContainerOptio
           const responseResult = this.transformResults(executionContextInfo, response.results, 0).find(newResult => newResult.id === result.id);
 
           if (responseResult) {
-            editor.applyUpdate(responseResult);
+            editor.applyUpdate(responseResult.id, responseResult.data?.rowsWithMetaData?.map(r => r.data) || []);
           }
         }
 
@@ -213,6 +216,7 @@ export class ContainerDataSource extends ResultSetDataSource<IDataContainerOptio
         limit,
         constraints: options.constraints,
         where: options.whereFilter || undefined,
+        anyConstraint: options.anyConstraint,
       },
       dataFormat: this.dataFormat,
     };
@@ -241,7 +245,7 @@ export class ContainerDataSource extends ResultSetDataSource<IDataContainerOptio
   private transformResults(executionContextInfo: IConnectionExecutionContextInfo, results: SqlQueryResults[], limit: number): IDatabaseResultSet[] {
     return results.map<IDatabaseResultSet>((result, index) => ({
       id: result.resultSet?.id || '0',
-      uniqueResultId: `${executionContextInfo.connectionId}_${executionContextInfo.id}_${index}`,
+      uniqueResultId: `${executionContextInfo.connectionId}_${executionContextInfo.id}_${result.dataFormat}_${index}`,
       projectId: executionContextInfo.projectId,
       connectionId: executionContextInfo.connectionId,
       contextId: executionContextInfo.id,

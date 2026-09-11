@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ export const Options = React.lazy(async () => {
   return { default: Options };
 });
 
-@injectable()
+@injectable(() => [ConnectionFormService])
 export class ConnectionOptionsTabService extends Bootstrap {
   constructor(private readonly connectionFormService: ConnectionFormService) {
     super();
@@ -26,6 +26,8 @@ export class ConnectionOptionsTabService extends Bootstrap {
     this.connectionFormService.parts.add({
       key: 'options',
       name: 'plugin_connections_connection_form_part_main',
+      title: 'plugin_connections_connection_form_part_main',
+      icon: '/icons/plugin_connection_plug.svg',
       order: 1,
       panel: () => Options,
     });

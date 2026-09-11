@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-settings-administration",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -23,9 +25,9 @@
     "@cloudbeaver/core-administration": "workspace:*",
     "@cloudbeaver/core-blocks": "workspace:*",
     "@cloudbeaver/core-di": "workspace:*",
+    "@cloudbeaver/core-dialogs": "workspace:*",
     "@cloudbeaver/core-events": "workspace:*",
     "@cloudbeaver/core-localization": "workspace:*",
-    "@cloudbeaver/core-root": "workspace:*",
     "@cloudbeaver/core-settings": "workspace:*",
     "@cloudbeaver/core-ui": "workspace:*",
     "@cloudbeaver/plugin-settings-panel": "workspace:*",
@@ -40,6 +42,7 @@
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
     "@types/react": "^19",
+    "rimraf": "^6",
     "typescript": "^5"
   }
 }

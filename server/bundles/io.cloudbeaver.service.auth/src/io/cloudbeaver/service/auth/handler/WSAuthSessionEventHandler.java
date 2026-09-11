@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.auth.SMAuthInfo;
+import org.jkiss.dbeaver.model.auth.SMAuthStatus;
 import org.jkiss.dbeaver.model.websocket.WSEventHandler;
 import org.jkiss.dbeaver.model.websocket.event.session.WSAuthEvent;
 
@@ -45,7 +46,7 @@ public class WSAuthSessionEventHandler implements WSEventHandler<WSAuthEvent> {
         SMAuthInfo authInfo = event.getAuthInfo();
         WebApplication webApplication = WebAppUtils.getWebApplication();
         WebAppSessionManager sessionManager = webApplication.getSessionManager();
-        if (authInfo.getAuthPermissions() == null) {
+        if (authInfo.getAuthPermissions() == null && authInfo.getAuthStatus() == SMAuthStatus.SUCCESS) {
             log.error("No auth permissions available in SUCCESS auth");
             return;
         }

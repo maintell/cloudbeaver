@@ -1,13 +1,12 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2024 DBeaver Corp and others
+ * Copyright (C) 2020-2025 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
-import { manifest } from './manifest.js';
 
-export default manifest;
+import './module.js';
 
 export * from './Administration/Users/UsersAdministrationNavigationService.js';
 export * from './Administration/Users/UsersTable/CreateUserService.js';
@@ -23,3 +22,5 @@ export * from './AdministrationUsersManagementService.js';
 export * from './externalUserProviderStatusContext.js';
 export * from './Administration/Users/Teams/TeamsForm/Options/getTeamOptionsFormPart.js';
 export * from './Administration/Users/UsersTable/UsersTableOptionsPanelService.js';
+export * from './Administration/Users/UsersTable/Filters/useUsersTableFilters.js';
+export * from './Administration/Users/UsersTable/Filters/FiltersActionButton.js';

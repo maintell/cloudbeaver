@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@ import { type ILoadableState, isContainsException } from '@cloudbeaver/core-util
 
 import { getComputed } from '../getComputed.js';
 import { useObjectRef } from '../useObjectRef.js';
+import { useService } from '@cloudbeaver/core-di';
+import { SessionExpireService } from '@cloudbeaver/core-root';
 
 export function useAutoLoad(
   component: { name: string },
@@ -18,7 +20,8 @@ export function useAutoLoad(
   enabled = true,
   lazy = false,
   throwExceptions = false,
-) {
+): void {
+  const sessionExpireService = useService(SessionExpireService);
   const unmountedRef = useObjectRef({ unmounted: false });
   const [loadFunctionName] = useState(`${component.name}.useAutoLoad(...)` as const);
   if (!Array.isArray(state)) {
@@ -28,18 +31,18 @@ export function useAutoLoad(
   for (const loader of state as ReadonlyArray<ILoadableState>) {
     getComputed(
       // activate mobx subscriptions
-      () => (!loader.isLoaded() || loader.isOutdated?.() === true) && !loader.isError(),
+      () => (!loader.isLoaded() || loader.isOutdated?.() === true) && !loader.isError() && loader.isLoadable?.() !== false,
     );
   }
 
   const obj = {
     [loadFunctionName]: async () => {
-      if (!enabled || unmountedRef.unmounted) {
+      if (!enabled || unmountedRef.unmounted || sessionExpireService.expired) {
         return;
       }
 
       for (const loader of state as ReadonlyArray<ILoadableState>) {
-        if (loader.isError() || (loader.lazy === true && !lazy)) {
+        if (loader.isError() || (loader.lazy === true && !lazy) || loader.isLoadable?.() === false) {
           continue;
         }
 

@@ -1,0 +1,26 @@
+{
+  "extends": "@dbeaver/tsconfig/tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "tsBuildInfoFile": "./lib/.tsbuildinfo",
+    "rootDir": "src",
+    "rootDirs": [
+      "src"
+    ],
+    "outDir": "lib",
+    "incremental": true,
+    "composite": true
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../cli"
+    }
+  ]
+}

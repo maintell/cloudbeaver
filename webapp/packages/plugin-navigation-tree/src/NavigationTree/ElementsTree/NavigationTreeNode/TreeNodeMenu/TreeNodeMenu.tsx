@@ -31,7 +31,7 @@ export const TreeNodeMenu = observer<TreeNodeMenuProps>(function TreeNodeMenu({ 
   const styles = useS(style);
   const connectionInfoResource = useService(ConnectionInfoResource);
   const menu = useMenu({ menu: MENU_NAV_TREE });
-  const connectionKey = getComputed(() => connectionInfoResource.getConnectionIdForNodeId(node.projectId!, node.id));
+  const connectionKey = getComputed(() => connectionInfoResource.getConnectionIdForNodeId(node.projectId!, node.uri));
 
   useDataContextLink(menu.context, (context, id) => {
     context.set(DATA_CONTEXT_NAV_NODE, node, id);
@@ -53,7 +53,6 @@ export const TreeNodeMenu = observer<TreeNodeMenuProps>(function TreeNodeMenu({ 
       menu={menu}
       className={s(styles, { contextMenu: true, selected })}
       contextMenuPosition={contextMenuPosition}
-      modal
       onVisibleSwitch={handleVisibleSwitch}
     >
       <Icon className={s(styles, { icon: true })} name="snack" viewBox="0 0 16 10" />

@@ -20,6 +20,7 @@ export const WelcomeNewSqlEditor = observer(function WelcomeNewSqlEditor() {
       before={<IconOrImage icon="/icons/sql_script.svg" />}
       description={translate(ACTION_SQL_EDITOR_NEW.info.tooltip)}
       className="tw:cursor-pointer tw:rounded-sm tw:overflow-hidden"
+      aria-label={translate(ACTION_SQL_EDITOR_NEW.info.tooltip)}
       big
       onClick={() => sqlEditorBootstrap.openSQLEditor()}
     >

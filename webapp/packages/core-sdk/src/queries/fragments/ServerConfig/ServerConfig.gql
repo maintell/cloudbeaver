@@ -2,7 +2,6 @@ fragment ServerConfig on ServerConfig {
   name
   version
   workspaceId
-  serverURL
   rootURI
   containerId
   defaultAuthRole
@@ -12,6 +11,7 @@ fragment ServerConfig on ServerConfig {
   sessionExpireTime
 
   anonymousAccessEnabled
+  bindSessionToIp
 
   adminCredentialsSaveEnabled
   publicCredentialsSaveEnabled

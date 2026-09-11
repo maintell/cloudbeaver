@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,10 @@
  */
 package io.cloudbeaver.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.InstanceCreator;
-import com.google.gson.Strictness;
 import io.cloudbeaver.DBWConstants;
 import io.cloudbeaver.DBWebException;
 import io.cloudbeaver.WebSessionProjectImpl;
+import io.cloudbeaver.model.WebConnectionConfig;
 import io.cloudbeaver.model.WebConnectionInfo;
 import io.cloudbeaver.model.WebNetworkHandlerConfigInput;
 import io.cloudbeaver.model.session.WebSession;
@@ -30,21 +27,28 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.access.DBAAuthCredentials;
-import org.jkiss.dbeaver.model.access.DBAAuthCredentialsWithComplexProperties;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.app.DBPProject;
 import org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration;
+import org.jkiss.dbeaver.model.connection.DBPConnectionType;
+import org.jkiss.dbeaver.model.connection.DBPDataSourceProviderDescriptor;
+import org.jkiss.dbeaver.model.connection.DBPDriver;
+import org.jkiss.dbeaver.model.impl.auth.AuthModelDatabaseNativeCredentials;
 import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
 import org.jkiss.dbeaver.model.net.ssh.SSHConstants;
+import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.websocket.event.datasource.WSDataSourceDisconnectEvent;
+import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
+import org.jkiss.dbeaver.registry.network.NetworkHandlerDescriptor;
+import org.jkiss.dbeaver.registry.network.NetworkHandlerRegistry;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
+import org.jkiss.dbeaver.utils.PropertySerializationUtils;
 import org.jkiss.utils.CommonUtils;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 public class WebDataSourceUtils {
 
@@ -53,9 +57,12 @@ public class WebDataSourceUtils {
     private WebDataSourceUtils() {
     }
 
-    public static void saveCredentialsInDataSource(WebConnectionInfo webConnectionInfo, DBPDataSourceContainer dataSourceContainer, DBPConnectionConfiguration configuration) {
+    public static void saveCredentialsInDataSource(
+        @NotNull WebConnectionInfo webConnectionInfo,
+        @NotNull DBPDataSourceContainer dataSourceContainer,
+        @NotNull DBPConnectionConfiguration configuration
+    ) {
         // Properties passed from web
-        // webConnectionInfo may be null in some cases (e.g. connection test when no actual connection exist yet)
         Map<String, Object> authProperties = webConnectionInfo.getSavedAuthProperties();
         if (authProperties != null) {
             authProperties.forEach((s, o) -> configuration.setAuthProperty(s, CommonUtils.toString(o)));
@@ -160,18 +167,24 @@ public class WebDataSourceUtils {
     }
 
 
-    public static boolean disconnectDataSource(@NotNull WebSession webSession, @NotNull DBPDataSourceContainer dataSource) {
+    public static boolean disconnectDataSource(
+        @NotNull WebSession webSession,
+        @NotNull DBPDataSourceContainer dataSource,
+        boolean sendDisconnectEvent
+    ) {
         if (dataSource.isConnected()) {
             try {
                 dataSource.disconnect(webSession.getProgressMonitor());
-                webSession.addSessionEvent(
-                    new WSDataSourceDisconnectEvent(
-                        dataSource.getProject().getId(),
-                        dataSource.getId(),
-                        webSession.getSessionId(),
-                        webSession.getUserId()
-                    )
-                );
+                if (sendDisconnectEvent) {
+                    webSession.addSessionEvent(
+                        new WSDataSourceDisconnectEvent(
+                            dataSource.getProject().getId(),
+                            dataSource.getId(),
+                            WebEventUtils.getSmSessionId(webSession),
+                            webSession.getUserId()
+                        )
+                    );
+                }
                 return true;
             } catch (DBException e) {
                 log.error("Error closing connection", e);
@@ -206,17 +219,202 @@ public class WebDataSourceUtils {
         return webSession.getAccessibleProjectById(projectId).getWebConnectionInfo(connectionId);
     }
 
-
-    public static void updateCredentialsFromProperties(@NotNull DBAAuthCredentials credentials, @NotNull Map<String, ?> properties) {
-        InstanceCreator<DBAAuthCredentials> credTypeAdapter = type -> credentials;
-        Gson credGson = new GsonBuilder()
-            .setStrictness(Strictness.LENIENT)
-            .registerTypeAdapter(credentials.getClass(), credTypeAdapter)
-            .create();
-
-        if (credentials instanceof DBAAuthCredentialsWithComplexProperties complexProperties) {
-            complexProperties.updateCredentialsFromComplexProperties(properties);
+    public static void updateCredentialsFromProperties(
+        @NotNull DBRProgressMonitor progressMonitor,
+        @NotNull DBAAuthCredentials credentials,
+        @Nullable Map<String, ?> properties
+    ) {
+        if (properties == null) {
+            return;
         }
-        credGson.fromJson(credGson.toJsonTree(properties), credentials.getClass());
+        PropertySerializationUtils.updateCredentialsFromProperties(progressMonitor, credentials, properties);
+    }
+
+    public static void saveAuthProperties(
+        @NotNull DBRProgressMonitor progressMonitor,
+        @NotNull DBPDataSourceContainer dataSourceContainer,
+        @NotNull DBPConnectionConfiguration configuration,
+        @Nullable Map<String, Object> authProperties,
+        boolean saveCredentials,
+        boolean sharedCredentials
+    ) {
+        saveAuthProperties(progressMonitor, dataSourceContainer, configuration, authProperties, saveCredentials, sharedCredentials, false);
+    }
+
+    public static void saveAuthProperties(
+        @NotNull DBRProgressMonitor progressMonitor,
+        @NotNull DBPDataSourceContainer dataSourceContainer,
+        @NotNull DBPConnectionConfiguration configuration,
+        @Nullable Map<String, Object> authProperties,
+        boolean saveCredentials,
+        boolean sharedCredentials,
+        boolean isTest
+    ) {
+        dataSourceContainer.setSavePassword(saveCredentials);
+        dataSourceContainer.setSharedCredentials(sharedCredentials);
+        if (!saveCredentials) {
+            // Reset credentials
+            if (authProperties == null) {
+                authProperties = new LinkedHashMap<>();
+            }
+            authProperties.replace(AuthModelDatabaseNativeCredentials.PROP_USER_PASSWORD, null);
+            dataSourceContainer.resetPassword();
+        } else {
+            if (authProperties == null) {
+                // No changes
+                return;
+            }
+        }
+        {
+            // Read save credentials
+            DBAAuthCredentials credentials = configuration.getAuthModel().loadCredentials(dataSourceContainer, configuration);
+
+            if (isTest) {
+                var currentAuthProps = new HashMap<String, String>();
+                for (Map.Entry<String, Object> stringObjectEntry : authProperties.entrySet()) {
+                    var value = stringObjectEntry.getValue() == null ? null : stringObjectEntry.getValue().toString();
+                    currentAuthProps.put(stringObjectEntry.getKey(), value);
+                }
+                configuration.setAuthProperties(currentAuthProps);
+            }
+            if (!authProperties.isEmpty()) {
+                updateCredentialsFromProperties(progressMonitor, credentials, authProperties);
+            }
+
+            configuration.getAuthModel().saveCredentials(dataSourceContainer, configuration, credentials);
+        }
+    }
+
+    public static void setConnectionConfiguration(
+        @NotNull DBPDriver driver,
+        @NotNull DBPConnectionConfiguration dsConfig,
+        @NotNull WebConnectionConfig config
+    ) {
+        setMainProperties(dsConfig, config);
+        if (config.getProperties() != null) {
+            Map<String, String> newProps = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> pe : config.getProperties().entrySet()) {
+                newProps.put(pe.getKey(), CommonUtils.toString(pe.getValue()));
+            }
+            dsConfig.setProperties(newProps);
+        }
+        if (config.getUserName() != null) {
+            dsConfig.setUserName(config.getUserName());
+        }
+        if (config.getUserPassword() != null) {
+            dsConfig.setUserPassword(config.getUserPassword());
+        }
+        if (config.getAuthModelId() != null) {
+            dsConfig.setAuthModelId(config.getAuthModelId());
+        }
+        if (config.getKeepAliveInterval() >= 0) {
+            dsConfig.setKeepAliveInterval(config.getKeepAliveInterval());
+        }
+        dsConfig.getBootstrap().setDefaultAutoCommit(config.isDefaultAutoCommit());
+        dsConfig.getBootstrap().setDefaultCatalogName(config.getDefaultCatalogName());
+        dsConfig.getBootstrap().setDefaultSchemaName(config.getDefaultSchemaName());
+        // Save provider props
+        if (config.getProviderProperties() != null) {
+            dsConfig.setProviderProperties(new LinkedHashMap<>());
+            for (Map.Entry<String, Object> e : config.getProviderProperties().entrySet()) {
+                dsConfig.setProviderProperty(e.getKey(), CommonUtils.toString(e.getValue()));
+            }
+        }
+        if (config.getConfigurationType() != null) {
+            dsConfig.setConfigurationType(config.getConfigurationType());
+        }
+        if (config.getConnectionType() != null) {
+            DBPConnectionType connectionType = DataSourceProviderRegistry.getInstance().getConnectionType(config.getConnectionType(), null);
+            if (connectionType != null) {
+                dsConfig.setConnectionType(connectionType);
+            }
+        }
+
+        if (CommonUtils.isEmpty(config.getUrl())) {
+            try {
+                dsConfig.setUrl(driver.getConnectionURL(dsConfig));
+            } catch (DBException e) {
+                log.error("Error preparing connection URL", e);
+            }
+        }
+        // Save network handlers
+        if (config.getNetworkHandlersConfig() != null) {
+            for (WebNetworkHandlerConfigInput nhc : config.getNetworkHandlersConfig()) {
+                DBWHandlerConfiguration handlerConfig = dsConfig.getHandler(nhc.getId());
+                if (handlerConfig == null) {
+                    NetworkHandlerDescriptor handlerDescriptor = NetworkHandlerRegistry.getInstance().getDescriptor(nhc.getId());
+                    if (handlerDescriptor == null) {
+                        log.warn("Can't find network handler '" + nhc.getId() + "'");
+                        continue;
+                    } else {
+                        handlerConfig = new DBWHandlerConfiguration(handlerDescriptor, null);
+                        WebDataSourceUtils.updateHandlerConfig(handlerConfig, nhc);
+                    }
+                } else {
+                    WebDataSourceUtils.updateHandlerConfig(handlerConfig, nhc);
+                }
+                dsConfig.updateHandler(handlerConfig);
+            }
+        }
+    }
+
+    public static void setMainProperties(@NotNull DBPConnectionConfiguration dsConfig, @NotNull WebConnectionConfig config) {
+        if (CommonUtils.isNotEmpty(config.getUrl())) {
+            dsConfig.setUrl(config.getUrl());
+            return;
+        }
+        if (config.getMainPropertyValues() != null) {
+            for (Map.Entry<String, Object> e : config.getMainPropertyValues().entrySet()) {
+                if (e.getValue() == null) {
+                    continue;
+                }
+                switch (e.getKey()) {
+                    case DBConstants.PROP_HOST -> dsConfig.setHostName(CommonUtils.toString(e.getValue()));
+                    case DBConstants.PROP_PORT -> dsConfig.setHostPort(CommonUtils.toString(e.getValue()));
+                    case DBConstants.PROP_DATABASE -> dsConfig.setDatabaseName(CommonUtils.toString(e.getValue()));
+                    case DBConstants.PROP_SERVER -> dsConfig.setServerName(CommonUtils.toString(e.getValue()));
+                    default -> throw new IllegalStateException("Unexpected value: " + e.getKey());
+                }
+            }
+            return;
+        }
+        if (config.getHost() != null) {
+            dsConfig.setHostName(config.getHost());
+        }
+        if (config.getPort() != null) {
+            dsConfig.setHostPort(config.getPort());
+        }
+        if (config.getDatabaseName() != null) {
+            dsConfig.setDatabaseName(config.getDatabaseName());
+        }
+        if (config.getServerName() != null) {
+            dsConfig.setServerName(config.getServerName());
+        }
+    }
+
+    @NotNull
+    public static DBPDriver getDriverById(String id) throws DBWebException {
+        int divPos = id.indexOf(':');
+        if (divPos < 0) {
+            throw new DBWebException("Bad driver id [" + id + "]");
+        }
+        String dsId = id.substring(0, divPos);
+        String driverId = id.substring(divPos + 1);
+        DBPDataSourceProviderDescriptor dsProvider = DBWorkbench.getPlatform().getDataSourceProviderRegistry().getDataSourceProvider(dsId);
+        if (dsProvider == null) {
+            throw new DBWebException("Data source provider '" + dsId + "' not found");
+        }
+        DBPDriver driver = dsProvider.getDriver(driverId);
+        if (driver == null) {
+            throw new DBWebException("Driver '" + driverId + "' not found in provider '" + dsId + "'");
+        }
+        return driver;
+    }
+
+    public static String getConnectionContainerInfo(@Nullable DBPDataSourceContainer container) {
+        if (container == null) {
+            return null;
+        }
+        return container.getName() + " [" + container.getId() + "]";
     }
 }

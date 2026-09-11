@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,13 +24,14 @@ import io.cloudbeaver.service.DBWServletContext;
 import io.cloudbeaver.service.WebServiceBindingBase;
 import io.cloudbeaver.service.fs.impl.WebServiceFS;
 import io.cloudbeaver.service.fs.model.WebFSServlet;
+import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.utils.CommonUtils;
 
 /**
  * Web service implementation
  */
-public class WebServiceBindingFS extends WebServiceBindingBase<DBWServiceFS> implements DBWServiceBindingServlet<CBApplication> {
+public class WebServiceBindingFS extends WebServiceBindingBase<DBWServiceFS> implements DBWServiceBindingServlet<CBApplication<?>> {
 
     private static final String SCHEMA_FILE_NAME = "schema/service.fs.graphqls";
 
@@ -42,82 +43,82 @@ public class WebServiceBindingFS extends WebServiceBindingBase<DBWServiceFS> imp
     public void bindWiring(DBWBindingContext model) throws DBWebException {
         model.getQueryType()
             .dataFetcher("fsListFileSystems",
-                env -> getService(env).getAvailableFileSystems(getWebSession(env), env.getArgument("projectId")))
+                env -> getService(env).getAvailableFileSystems(getWebSession(env), getArgumentVal(env, "projectId")))
             .dataFetcher("fsFileSystem",
                 env -> getService(env).getFileSystem(
                     getWebSession(env),
-                    env.getArgument("projectId"),
-                    env.getArgument("nodePath")
+                    getArgumentVal(env, "projectId"),
+                    getArgumentVal(env, "nodePath")
                 )
             )
             .dataFetcher("fsFile",
                 env -> getService(env).getFile(getWebSession(env),
-                    env.getArgument("nodePath")
+                    getArgumentVal(env, "nodePath")
                 )
             )
             .dataFetcher("fsListFiles",
                 env -> getService(env).getFiles(getWebSession(env),
-                    env.getArgument("folderPath")
+                    getArgumentVal(env, "folderPath")
                 )
             )
             .dataFetcher("fsReadFileContentAsString",
                 env -> getService(env).readFileContent(getWebSession(env),
-                    env.getArgument("nodePath")
+                    getArgumentVal(env, "nodePath")
                 )
             )
         ;
         model.getMutationType()
             .dataFetcher("fsCreateFile",
                 env -> getService(env).createFile(getWebSession(env),
-                    env.getArgument("parentPath"),
-                    env.getArgument("fileName")
+                    getArgumentVal(env, "parentPath"),
+                    getArgumentVal(env, "fileName")
                 )
             )
             .dataFetcher("fsCreateFolder",
                 env -> getService(env).createFolder(getWebSession(env),
-                    env.getArgument("parentPath"),
-                    env.getArgument("folderName")
+                    getArgumentVal(env, "parentPath"),
+                    getArgumentVal(env, "folderName")
                     )
             )
             .dataFetcher("fsDelete",
                 env -> getService(env).deleteFile(getWebSession(env),
-                    env.getArgument("nodePath")
+                    getArgumentVal(env, "nodePath")
                 )
             )
             .dataFetcher("fsMove",
                 env -> getService(env).moveFile(
                     getWebSession(env),
-                    env.getArgument("nodePath"),
-                    env.getArgument("toParentNodePath")
+                    getArgumentVal(env, "nodePath"),
+                    getArgumentVal(env, "toParentNodePath")
                 )
             )
             .dataFetcher("fsRename",
                 env -> getService(env).renameFile(
                     getWebSession(env),
-                    env.getArgument("nodePath"),
-                    env.getArgument("newName")
+                    getArgumentVal(env, "nodePath"),
+                    getArgumentVal(env, "newName")
                 )
             )
             .dataFetcher("fsCopy",
                 env -> getService(env).copyFile(
                     getWebSession(env),
-                    env.getArgument("nodePath"),
-                    env.getArgument("toParentNodePath")
+                    getArgumentVal(env, "nodePath"),
+                    getArgumentVal(env, "toParentNodePath")
                 )
             )
             .dataFetcher("fsWriteFileStringContent",
                 env -> getService(env).writeFileContent(
                     getWebSession(env),
-                    env.getArgument("nodePath"),
-                    env.getArgument("data"),
-                    CommonUtils.toBoolean(env.getArgument("forceOverwrite"))
+                    getArgumentVal(env, "nodePath"),
+                    getArgumentVal(env, "data"),
+                    CommonUtils.toBoolean(getArgument(env, "forceOverwrite"))
                 )
             )
         ;
     }
 
     @Override
-    public void addServlets(CBApplication application, DBWServletContext servletContext) throws DBException {
+    public void addServlets(@NotNull CBApplication<?> application, @NotNull DBWServletContext servletContext) throws DBException {
         if (!application.isMultiuser()) {
             return;
         }

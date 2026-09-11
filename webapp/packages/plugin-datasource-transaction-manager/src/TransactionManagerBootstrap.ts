@@ -24,9 +24,10 @@ import { ExecutorInterrupter, type IExecutionContextProvider } from '@cloudbeave
 import { LocalizationService } from '@cloudbeaver/core-localization';
 import { OptionsPanelService } from '@cloudbeaver/core-ui';
 import { isNotNullDefined } from '@dbeaver/js-helpers';
-import { ActionService, MenuCustomItem, MenuService } from '@cloudbeaver/core-view';
+import { ActionService, MenuCustomItem, menuItemsPlaceAfter, MenuService } from '@cloudbeaver/core-view';
 import { ConnectionSchemaManagerService } from '@cloudbeaver/plugin-datasource-context-switch';
 import { MENU_APP_ACTIONS } from '@cloudbeaver/plugin-top-app-bar';
+import { MENU_TOOLS } from '@cloudbeaver/plugin-tools-panel';
 
 import { ACTION_DATASOURCE_TRANSACTION_COMMIT } from './actions/ACTION_DATASOURCE_TRANSACTION_COMMIT.js';
 import { ACTION_DATASOURCE_TRANSACTION_COMMIT_MODE_TOGGLE } from './actions/ACTION_DATASOURCE_TRANSACTION_COMMIT_MODE_TOGGLE.js';
@@ -43,7 +44,21 @@ const TransactionLogDialog = importLazyComponent(() =>
   import('./TransactionLog/TransactionLogDialog.js').then(module => module.TransactionLogDialog),
 );
 
-@injectable()
+@injectable(() => [
+  MenuService,
+  ActionService,
+  ConnectionSchemaManagerService,
+  ConnectionExecutionContextService,
+  ConnectionExecutionContextResource,
+  ConnectionInfoResource,
+  ConnectionsManagerService,
+  OptionsPanelService,
+  NotificationService,
+  CommonDialogService,
+  LocalizationService,
+  TransactionManagerSettingsService,
+  TransactionLogCountResource,
+])
 export class TransactionManagerBootstrap extends Bootstrap {
   constructor(
     private readonly menuService: MenuService,
@@ -65,6 +80,26 @@ export class TransactionManagerBootstrap extends Bootstrap {
 
   override register() {
     this.connectionsManagerService.onDisconnect.addHandler(this.disconnectHandler.bind(this));
+
+    const TRANSACTION_INFO_ITEM = new MenuCustomItem(
+      {
+        id: 'transaction-info',
+        getComponent: () => TransactionInfoAction,
+      },
+      {
+        onSelect: async () => {
+          const transaction = this.getContextTransaction();
+
+          if (transaction) {
+            await this.commonDialogService.open(TransactionLogDialog, {
+              transaction,
+              onCommit: () => this.commit(transaction),
+              onRollback: () => this.rollback(transaction),
+            });
+          }
+        },
+      },
+    );
 
     this.menuService.addCreator({
       menus: [MENU_APP_ACTIONS],
@@ -90,26 +125,24 @@ export class TransactionManagerBootstrap extends Bootstrap {
         ];
 
         if (transaction && transaction.autoCommit === false) {
-          result.push(
-            new MenuCustomItem(
-              {
-                id: 'transaction-info',
-                getComponent: () => TransactionInfoAction,
-              },
-              {
-                onSelect: async () => {
-                  await this.commonDialogService.open(TransactionLogDialog, {
-                    transaction,
-                    onCommit: () => this.commit(transaction),
-                    onRollback: () => this.rollback(transaction),
-                  });
-                },
-              },
-            ),
-          );
+          result.push(TRANSACTION_INFO_ITEM);
         }
 
         return result;
+      },
+      orderItems: (context, items) => {
+        menuItemsPlaceAfter(
+          items,
+          [
+            ACTION_DATASOURCE_TRANSACTION_COMMIT,
+            ACTION_DATASOURCE_TRANSACTION_ROLLBACK,
+            ACTION_DATASOURCE_TRANSACTION_COMMIT_MODE_TOGGLE,
+            TRANSACTION_INFO_ITEM,
+          ],
+          MENU_TOOLS,
+        );
+
+        return items;
       },
     });
 
@@ -129,7 +162,7 @@ export class TransactionManagerBootstrap extends Bootstrap {
           const icon = `/icons/commit_mode_${auto ? 'auto' : 'manual'}_m.svg`;
           const label = `plugin_datasource_transaction_manager_commit_mode_switch_to_${auto ? 'manual' : 'auto'}`;
 
-          return { ...action.info, icon, label, tooltip: label };
+          return { ...action.info, icon, label: '', tooltip: label };
         }
 
         return action.info;
@@ -222,17 +255,25 @@ export class TransactionManagerBootstrap extends Bootstrap {
           const transaction = this.connectionExecutionContextService.get(context.id);
 
           if (transaction?.autoCommit === false) {
+            const key = createTransactionInfoParam(context.connectionId, context.projectId, context.id);
+            const count = await this.transactionLogCountResource.load(key);
+
+            if (count === 0) {
+              return;
+            }
+
             const connectionData = this.connectionInfoResource.get(connectionKey);
-            const state = await this.commonDialogService.open(ConfirmationDialog, {
+
+            const { status, result } = await this.commonDialogService.open(ConfirmationDialog, {
               title: `${this.localizationService.translate('plugin_datasource_transaction_manager_commit')} (${connectionData?.name ?? context.id})`,
               message: 'plugin_datasource_transaction_manager_commit_confirmation_message',
               confirmActionText: 'plugin_datasource_transaction_manager_commit',
-              extraStatus: 'no',
+              showExtraAction: true,
             });
 
-            if (state === DialogueStateResult.Resolved) {
+            if (status === DialogueStateResult.Resolved) {
               await this.commit(transaction, () => ExecutorInterrupter.interrupt(contexts));
-            } else if (state === DialogueStateResult.Rejected) {
+            } else if (!result?.isExtraAction) {
               ExecutorInterrupter.interrupt(contexts);
             }
           }

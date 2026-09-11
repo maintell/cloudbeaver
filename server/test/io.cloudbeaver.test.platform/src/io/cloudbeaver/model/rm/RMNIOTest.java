@@ -19,27 +19,23 @@ package io.cloudbeaver.model.rm;
 import io.cloudbeaver.CloudbeaverMockTest;
 import io.cloudbeaver.app.CEAppStarter;
 import io.cloudbeaver.model.session.WebSession;
-import io.cloudbeaver.server.CBConstants;
 import io.cloudbeaver.service.rm.nio.RMNIOFileSystem;
 import io.cloudbeaver.service.rm.nio.RMNIOFileSystemProvider;
 import io.cloudbeaver.service.rm.nio.RMPath;
 import io.cloudbeaver.test.WebGQLClient;
-import io.cloudbeaver.test.platform.CEServerTestSuite;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.auth.SMAuthStatus;
 import org.jkiss.dbeaver.model.data.json.JSONUtils;
 import org.jkiss.dbeaver.model.rm.RMController;
 import org.jkiss.dbeaver.model.rm.RMProject;
 import org.jkiss.utils.SecurityUtils;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.CookieManager;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -53,32 +49,22 @@ public class RMNIOTest extends CloudbeaverMockTest {
     private static RMProject testProject;
     private static RMNIOFileSystemProvider rmFsProvider;
 
-    @BeforeClass
+    @BeforeAll
     public static void init() throws Exception {
-        var cookieManager = new CookieManager();
         CEAppStarter.startServerIfNotStarted();
-        var httpClient = HttpClient.newBuilder()
-            .cookieHandler(cookieManager)
-            .version(HttpClient.Version.HTTP_2)
-            .build();
-        WebGQLClient client = CEAppStarter.createClient(httpClient);
+        WebGQLClient client = CEAppStarter.createClient();
         Map<String, Object> authInfo = CEAppStarter.authenticateTestUser(client);
-        Assert.assertEquals(SMAuthStatus.SUCCESS.name(), JSONUtils.getString(authInfo, "authStatus"));
+        Assertions.assertEquals(SMAuthStatus.SUCCESS.name(), JSONUtils.getString(authInfo, "authStatus"));
 
-        String sessionId = cookieManager.getCookieStore().getCookies()
-            .stream()
-            .filter(cookie -> cookie.getName().equals(CBConstants.CB_SESSION_COOKIE_NAME))
-            .findFirst()
-            .get()
-            .getValue();
+        String sessionId = client.getSessionIdCookie();
         webSession = (WebSession) CEAppStarter.getTestApp().getSessionManager().getSession(sessionId);
-        Assert.assertNotNull(webSession);
+        Assertions.assertNotNull(webSession);
         var projectName = "NIO_Test" + SecurityUtils.generateUniqueId();
         testProject = webSession.getRmController().createProject(projectName, null);
         rmFsProvider = new RMNIOFileSystemProvider(webSession.getRmController());
     }
 
-    @AfterClass
+    @AfterAll
     public static void destroy() throws Exception {
         if (webSession != null && testProject != null) {
             webSession.getUserContext().getRmController().deleteProject(testProject.getId());
@@ -89,19 +75,19 @@ public class RMNIOTest extends CloudbeaverMockTest {
     public void projectPathTest() throws DBException {
         var projectUri = getProjectUri();
         RMPath path = (RMPath) rmFsProvider.getPath(projectUri);
-        Assert.assertEquals(path.getRmProjectId(), testProject.getId());
-        Assert.assertTrue(path.isProjectPath());
-        Assert.assertTrue(path.isAbsolute());
-        Assert.assertNull(path.getParent());
-        Assert.assertNull(path.getRoot());
-        Assert.assertTrue(Files.isDirectory(path));
-        Assert.assertTrue(Files.exists(path));
+        Assertions.assertEquals(path.getRmProjectId(), testProject.getId());
+        Assertions.assertTrue(path.isProjectPath());
+        Assertions.assertTrue(path.isAbsolute());
+        Assertions.assertNull(path.getParent());
+        Assertions.assertNull(path.getRoot());
+        Assertions.assertTrue(Files.isDirectory(path));
+        Assertions.assertTrue(Files.exists(path));
     }
 
     @Test
     public void testNotExistProject() {
         RMPath notExistPath = new RMPath(new RMNIOFileSystem("s_not_exist", rmFsProvider));
-        Assert.assertFalse(Files.exists(notExistPath));
+        Assertions.assertFalse(Files.exists(notExistPath));
     }
 
     @Test
@@ -110,17 +96,17 @@ public class RMNIOTest extends CloudbeaverMockTest {
         String randomProject = "s_random_project_" + randomName;
 
         RMPath newProjectPath = new RMPath(new RMNIOFileSystem(randomProject, rmFsProvider));
-        Assert.assertFalse(Files.exists(newProjectPath));
+        Assertions.assertFalse(Files.exists(newProjectPath));
 
         //create project via nio
         Files.createDirectory(newProjectPath);
-        Assert.assertTrue(Files.exists(newProjectPath));
-        Assert.assertNotNull(webSession.getRmController().getProject(randomProject, false, false));
+        Assertions.assertTrue(Files.exists(newProjectPath));
+        Assertions.assertNotNull(webSession.getRmController().getProject(randomProject, false, false));
 
         //delete project via nio
         Files.delete(newProjectPath);
-        Assert.assertFalse(Files.exists(newProjectPath));
-        Assert.assertNull(webSession.getRmController().getProject(randomProject, false, false));
+        Assertions.assertFalse(Files.exists(newProjectPath));
+        Assertions.assertNull(webSession.getRmController().getProject(randomProject, false, false));
     }
 
     @Test
@@ -128,7 +114,7 @@ public class RMNIOTest extends CloudbeaverMockTest {
         RMPath rootPath = (RMPath) rmFsProvider.getPath(getProjectUri());
         String scriptName = "child.sql";
         Path scriptPath = rootPath.resolve(scriptName);
-        Assert.assertEquals(getProjectUri() + "/" + "child.sql", scriptPath.toString());
+        Assertions.assertEquals(getProjectUri() + "/" + "child.sql", scriptPath.toString());
     }
 
     @Test
@@ -144,8 +130,8 @@ public class RMNIOTest extends CloudbeaverMockTest {
                 list
                     .map(path -> ((RMPath) path).getResourcePath())
                     .collect(Collectors.toSet());
-            Assert.assertTrue(filesFromNio.contains(file1));
-            Assert.assertTrue(filesFromNio.contains(file2));
+            Assertions.assertTrue(filesFromNio.contains(file1));
+            Assertions.assertTrue(filesFromNio.contains(file2));
         }
     }
 
@@ -158,8 +144,8 @@ public class RMNIOTest extends CloudbeaverMockTest {
 
         //create file
         Files.createFile(scriptPath);
-        Assert.assertTrue(Files.exists(scriptPath));
-        Assert.assertNotNull(rm.getResource(testProject.getId(), script));
+        Assertions.assertTrue(Files.exists(scriptPath));
+        Assertions.assertNotNull(rm.getResource(testProject.getId(), script));
 
         //set content rm://s_test_project/test_script.sql
 
@@ -167,13 +153,13 @@ public class RMNIOTest extends CloudbeaverMockTest {
         Files.writeString(scriptPath, sql);
         String dataFromNio = Files.readString(scriptPath);
         String dataFromRM = new String(rm.getResourceContents(testProject.getId(), script));
-        Assert.assertEquals(sql, dataFromNio);
-        Assert.assertEquals(sql, dataFromRM);
+        Assertions.assertEquals(sql, dataFromNio);
+        Assertions.assertEquals(sql, dataFromRM);
 
         //delete
         Files.delete(scriptPath);
-        Assert.assertFalse(Files.exists(scriptPath));
-        Assert.assertNull(rm.getResource(testProject.getId(), script));
+        Assertions.assertFalse(Files.exists(scriptPath));
+        Assertions.assertNull(rm.getResource(testProject.getId(), script));
     }
 
 

@@ -31,8 +31,6 @@ import org.jkiss.dbeaver.model.rm.RMProject;
 import org.jkiss.dbeaver.model.rm.RMResource;
 import org.jkiss.dbeaver.model.rm.RMResourceType;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
-import org.jkiss.dbeaver.registry.ResourceTypeDescriptor;
-import org.jkiss.dbeaver.registry.ResourceTypeRegistry;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
@@ -44,29 +42,34 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
 
     private final RMResource resource;
 
-    DBNResourceManagerResource(DBNNode parentNode, RMResource resource) {
+    DBNResourceManagerResource(@NotNull DBNNode parentNode, @NotNull RMResource resource) {
         super(parentNode);
         this.resource = resource;
     }
 
+    @NotNull
     @Override
     public String getNodeType() {
         return "rm.resource";
     }
 
+    @NotNull
     @Override
     public String getNodeDisplayName() {
         return resource.getName();
     }
 
+    @Nullable
     @Override
     public String getNodeDescription() {
         return null;
     }
 
+    @Nullable
     @Override
     public DBPImage getNodeIcon() {
         if (resource.isFolder()) {
+/*
             if (getParentNode() instanceof DBNResourceManagerResource) {
                 return DBIcon.TREE_FOLDER;
             }
@@ -78,11 +81,12 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
             if (folderResType != null) {
                 return folderResType.getFolderIcon();
             }
+*/
             return DBIcon.TREE_FOLDER;
         } else {
             var fileExtension = IOUtils.getFileExtension(getNodeDisplayName());
             if (!CommonUtils.isEmpty(fileExtension)) {
-                RMProject project = getProjectNode();
+                RMProject project = getRmProject();
                 if (project != null) {
                     for (RMResourceType rt : project.getResourceTypes()) {
                         if (ArrayUtils.contains(rt.getFileExtensions(), fileExtension)) {
@@ -95,7 +99,8 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
         }
     }
 
-    private RMProject getProjectNode() {
+    @Nullable
+    public RMProject getRmProject() {
         for (DBNNode node = this; node != null; node = node.getParentNode()) {
             if (node instanceof DBNResourceManagerProject) {
                 return  ((DBNResourceManagerProject) node).getProject();
@@ -109,6 +114,7 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
         return resource.isFolder();
     }
 
+    @Nullable
     @Override
     public DBNNode[] getChildren(@NotNull DBRProgressMonitor monitor) throws DBException {
         if (children == null && !monitor.isForceCacheUsage()) {
@@ -154,14 +160,9 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
         throw new DBException("Can't detect resource root node");
     }
 
-    @Deprecated
+    @Nullable
     @Override
-    public String getNodeItemPath() {
-        return getParentNode().getNodeItemPath() + "/" + getNodeDisplayName();
-    }
-
-    @Override
-    public DBNNode refreshNode(DBRProgressMonitor monitor, Object source) throws DBException {
+    public DBNNode refreshNode(@NotNull DBRProgressMonitor monitor, @Nullable Object source) throws DBException {
         this.children = null;
         return super.refreshNode(monitor, source);
     }
@@ -171,7 +172,7 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
     }
 
     @Override
-    public void rename(DBRProgressMonitor monitor, String newName) throws DBException {
+    public void rename(@NotNull DBRProgressMonitor monitor, @NotNull String newName) throws DBException {
         String resourceName = resource.getName();
         try {
             if (newName.indexOf('.') == -1) {
@@ -192,6 +193,7 @@ public class DBNResourceManagerResource extends DBNAbstractResourceManagerNode {
         }
     }
 
+    @NotNull
     @Override
     public String toString() {
         return getNodeDisplayName();

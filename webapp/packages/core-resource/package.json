@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/core-resource",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -20,7 +22,6 @@
     "validate-dependencies": "core-cli-validate-dependencies"
   },
   "dependencies": {
-    "@cloudbeaver/core-di": "workspace:*",
     "@cloudbeaver/core-executor": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
     "mobx": "^6",
@@ -30,8 +31,10 @@
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
+    "@dbeaver/react-tests": "workspace:*",
     "mobx": "^6",
+    "rimraf": "^6",
     "typescript": "^5",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }

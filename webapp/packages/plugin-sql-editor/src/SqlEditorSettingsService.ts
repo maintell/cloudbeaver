@@ -1,11 +1,11 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
-import { Dependency, injectable } from '@cloudbeaver/core-di';
+import { injectable } from '@cloudbeaver/core-di';
 import {
   FEATURE_GIT_ID,
   HIGHEST_SETTINGS_LAYER,
@@ -56,6 +56,9 @@ const defaultSettings = schema.object({
   'plugin.sql-editor.maxFileSize': schema.coerce.number().default(10 * 1024), // kilobyte
   'plugin.sql-editor.disabled': schemaExtra.stringedBoolean().default(false),
   'plugin.sql-editor.autoSave': schemaExtra.stringedBoolean().default(true),
+  'plugin.sql-editor.highlightWhitespace': schemaExtra.stringedBoolean().default(false),
+  'sql.parameter.enabled': schemaExtra.stringedBoolean().default(true),
+  'sql.variables.enabled': schemaExtra.stringedBoolean().default(true),
   'sql.proposals.insert.table.alias': schema.coerce
     .string()
     .transform(value => {
@@ -73,6 +76,7 @@ const defaultSettings = schema.object({
   'SQLEditor.ContentAssistant.proposals.long.name': schema.coerce.boolean().default(false),
   'SQLEditor.ContentAssistant.experimental.mode': schema.coerce
     .string()
+    .pipe(schema.enum(ASSISTANT_MODE_OPTIONS))
     .transform(value => {
       switch (value) {
         case 'DEFAULT':
@@ -81,14 +85,21 @@ const defaultSettings = schema.object({
           return 'NEW';
       }
     })
-    .pipe(schema.enum(ASSISTANT_MODE_OPTIONS).default('NEW')),
+    .default('NEW'),
 });
 
 type SqlEditorSettingsSchema = typeof defaultSettings;
 export type SqlEditorSettings = schema.infer<SqlEditorSettingsSchema>;
 
-@injectable()
-export class SqlEditorSettingsService extends Dependency {
+@injectable(() => [
+  SettingsProviderService,
+  SettingsManagerService,
+  SettingsResolverService,
+  SettingsTransformationService,
+  ServerSettingsManagerService,
+  ServerConfigResource,
+])
+export class SqlEditorSettingsService {
   get scriptExecutionEnabled(): boolean {
     return this.settings.getValue('plugin.sql-editor.script.executionEnabled');
   }
@@ -108,8 +119,20 @@ export class SqlEditorSettingsService extends Dependency {
     return this.settings.getValue('sql.proposals.insert.table.alias');
   }
 
+  get parameterEnabled(): boolean {
+    return this.settings.getValue('sql.parameter.enabled');
+  }
+
+  get variablesEnabled(): boolean {
+    return this.settings.getValue('sql.variables.enabled');
+  }
+
   get longNameProposals(): boolean {
     return this.settings.getValue('SQLEditor.ContentAssistant.proposals.long.name');
+  }
+
+  get highlightWhitespace(): boolean {
+    return this.settings.getValue('plugin.sql-editor.highlightWhitespace');
   }
 
   readonly settings: SettingsProvider<typeof defaultSettings>;
@@ -122,12 +145,11 @@ export class SqlEditorSettingsService extends Dependency {
     private readonly serverSettingsManagerService: ServerSettingsManagerService,
     private readonly serverConfigResource: ServerConfigResource,
   ) {
-    super();
     this.settings = this.settingsProviderService.createSettings(defaultSettings);
     this.settingsResolverService.addResolver(
       ROOT_SETTINGS_LAYER,
       /** @deprecated Use settings instead, will be removed in 23.0.0 */
-      createSettingsAliasResolver<SqlEditorSettingsSchema>(this.settingsResolverService, {
+      createSettingsAliasResolver<SqlEditorSettingsSchema>(this.settingsProviderService.settingsResolver, {
         'plugin.sql-editor.autoSave': 'core.app.sqlEditor.autoSave',
         'plugin.sql-editor.maxFileSize': 'core.app.sqlEditor.maxFileSize',
         'plugin.sql-editor.disabled': 'core.app.sqlEditor.disabled',
@@ -135,7 +157,7 @@ export class SqlEditorSettingsService extends Dependency {
     );
     this.settingsResolverService.addResolver(
       HIGHEST_SETTINGS_LAYER,
-      createSettingsOverrideResolver<SqlEditorSettingsSchema>(this.settingsResolverService, {
+      createSettingsOverrideResolver<SqlEditorSettingsSchema>(this.settingsProviderService.settingsResolver, {
         'plugin.sql-editor.script.executionEnabled': {
           key: 'permission.sql.script.execution',
           filter: value => !value,
@@ -203,6 +225,16 @@ export class SqlEditorSettingsService extends Dependency {
           description: this.serverConfigResource.isFeatureEnabled(FEATURE_GIT_ID, true)
             ? 'plugin_sql_editor_settings_auto_save_description_git_integration'
             : 'plugin_sql_editor_settings_auto_save_description',
+        },
+        {
+          group: SQL_EDITOR_SETTINGS_GROUP,
+          key: 'plugin.sql-editor.highlightWhitespace',
+          access: {
+            scope: ['client'],
+          },
+          type: ESettingsValueType.Checkbox,
+          name: 'plugin_sql_editor_settings_highlight_white_space',
+          description: 'plugin_sql_editor_settings_highlight_white_space_description',
         },
       ];
 

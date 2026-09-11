@@ -16,6 +16,7 @@
  */
 package io.cloudbeaver.server.jetty;
 
+import graphql.GraphQL;
 import io.cloudbeaver.model.config.CBServerConfig;
 import io.cloudbeaver.registry.WebServiceRegistry;
 import io.cloudbeaver.server.CBApplication;
@@ -23,15 +24,17 @@ import io.cloudbeaver.server.CBConstants;
 import io.cloudbeaver.server.filters.ServerConfigurationTimeLimitFilter;
 import io.cloudbeaver.server.graphql.GraphQLEndpoint;
 import io.cloudbeaver.server.servlets.CBImageServlet;
+import io.cloudbeaver.server.servlets.CBManifestServlet;
 import io.cloudbeaver.server.servlets.CBStaticServlet;
 import io.cloudbeaver.server.servlets.WebStatusServlet;
+import io.cloudbeaver.server.websockets.CBEventsLongPollingServlet;
 import io.cloudbeaver.server.websockets.CBEventsWebSocket;
 import io.cloudbeaver.server.websockets.CBWebSocketServerConfigurator;
 import io.cloudbeaver.service.DBWServiceBindingServlet;
 import io.cloudbeaver.service.DBWServiceBindingWebSocket;
 import jakarta.websocket.server.ServerEndpointConfig;
-import org.eclipse.jetty.ee10.servlet.*;
-import org.eclipse.jetty.ee10.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
+import org.eclipse.jetty.ee11.servlet.*;
+import org.eclipse.jetty.ee11.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.resource.ResourceFactory;
 import org.eclipse.jetty.xml.XmlConfiguration;
@@ -46,11 +49,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class CBJettyServer {
 
     private static final Log log = Log.getLog(CBJettyServer.class);
+
     static {
         // Set Jetty log level to WARN
         System.setProperty("org.eclipse.jetty.util.log.class", "org.eclipse.jetty.util.log.StdErrLog");
@@ -115,14 +120,23 @@ public class CBJettyServer {
                 ServletHolder imagesServletHolder = new ServletHolder("images", new CBImageServlet());
                 servletContextHandler.addServlet(imagesServletHolder, serverConfiguration.getServicesURI() + "images/*");
 
+                ServletHolder manifestServletHolder = new ServletHolder("manifest", new CBManifestServlet(contentRootPath));
+                servletContextHandler.addServlet(manifestServletHolder, "/manifest.webmanifest");
+
                 servletContextHandler.addServlet(new ServletHolder("status", new WebStatusServlet()), "/status");
 
+                ServletHolder eventsServletHolder = new ServletHolder("events", new CBEventsLongPollingServlet());
+                servletContextHandler.addServlet(eventsServletHolder, serverConfiguration.getServicesURI() + "events/*");
+
+                GraphQLEndpoint endpoint = application.createGraphQLEndpoint(new ServerConfigurationTimeLimitFilter(application));
+                application.addApplicationContextValue(GraphQL.class.getName(), endpoint.getGraphQL());
+                String gqlServletPath = serverConfiguration.getServicesURI() + "gql/*";
                 servletContextHandler.addServlet(
                     new ServletHolder(
                         "graphql",
-                        new GraphQLEndpoint(new ServerConfigurationTimeLimitFilter(application))
+                        endpoint
                     ),
-                    serverConfiguration.getServicesURI() + "gql/*"
+                    gqlServletPath
                 );
                 servletContextHandler.addEventListener(new CBServerContextListener(application));
 
@@ -154,7 +168,11 @@ public class CBJettyServer {
                         }
                     }
                 }
-                FilterHolder hostsFilter = new FilterHolder(new RequestHostFilter(application, excludedFilterPaths));
+                FilterHolder hostsFilter = new FilterHolder(new RequestHostFilter(
+                    application,
+                    excludedFilterPaths,
+                    Set.of(gqlServletPath)
+                ));
                 servletContextHandler.addFilter(hostsFilter, "/*", null);
 
 
@@ -187,11 +205,15 @@ public class CBJettyServer {
                     log.debug("\t" + sm.getServletName() + ": " + Arrays.toString(sm.getPathSpecs())); //$NON-NLS-1$
                 }
 
-                log.debug("Active websocket mappings:");
-                for (String mapping : webSocketContext.getMappings()) {
-                    log.debug("\t" + mapping);
+                List<String> wsMappings = webSocketContext.getMappings();
+                if (!wsMappings.isEmpty()) {
+                    log.debug("Active websocket mappings:");
+                    for (String mapping : wsMappings) {
+                        log.debug("\t" + mapping);
+                    }
+                } else {
+                    log.debug("No websocket mappings");
                 }
-
             }
 
             boolean forwardProxy = application.getAppConfiguration().isEnabledForwardProxy();

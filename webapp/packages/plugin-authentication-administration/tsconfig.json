@@ -8,10 +8,10 @@
   },
   "references": [
     {
-      "path": "../../../common-react/@dbeaver/ui-kit"
+      "path": "../../common-react/@dbeaver/ui-kit"
     },
     {
-      "path": "../../../common-typescript/@dbeaver/js-helpers"
+      "path": "../../common-typescript/@dbeaver/js-helpers"
     },
     {
       "path": "../core-administration"
@@ -72,14 +72,16 @@
     },
     {
       "path": "../plugin-authentication"
+    },
+    {
+      "path": "../plugin-data-grid"
     }
   ],
   "include": [
     "__custom_mocks__/**/*",
     "src/**/*",
     "src/**/*.json",
-    "src/**/*.css",
-    "src/**/*.scss"
+    "src/**/*.css"
   ],
   "exclude": [
     "**/node_modules",

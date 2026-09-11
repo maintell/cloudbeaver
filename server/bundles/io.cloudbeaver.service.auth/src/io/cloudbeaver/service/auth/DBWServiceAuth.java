@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package io.cloudbeaver.service.auth;
 
 import io.cloudbeaver.DBWebException;
 import io.cloudbeaver.WebAction;
+import io.cloudbeaver.WebParameterSecure;
 import io.cloudbeaver.model.WebPropertyInfo;
 import io.cloudbeaver.model.session.WebSession;
 import io.cloudbeaver.service.DBWService;
@@ -35,6 +36,7 @@ public interface DBWServiceAuth extends DBWService {
 
     @WebAction(authRequired = false)
     WebAuthStatus authLogin(
+        @NotNull HttpServletRequest httpRequest,
         @NotNull WebSession webSession,
         @NotNull String providerId,
         @Nullable String providerConfigurationId,
@@ -77,7 +79,11 @@ public interface DBWServiceAuth extends DBWService {
     WebAuthProviderInfo[] getAuthProviders(@NotNull HttpServletRequest request) throws DBWebException;
 
     @WebAction()
-    boolean changeLocalPassword(@NotNull WebSession webSession, @NotNull String oldPassword, @NotNull String newPassword) throws DBWebException;
+    boolean changeLocalPassword(
+        @NotNull WebSession webSession,
+        @WebParameterSecure @NotNull String oldPassword,
+        @WebParameterSecure @NotNull String newPassword
+    ) throws DBWebException;
 
     @WebAction(authRequired = false)
     WebPropertyInfo[] listUserProfileProperties(@NotNull WebSession webSession);

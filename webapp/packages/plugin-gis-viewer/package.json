@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-gis-viewer",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -39,10 +41,10 @@
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@types/leaflet": "^1",
-    "@types/proj4": "^2.19.0",
     "@types/react": "^19",
     "@types/wellknown": "^0",
     "leaflet": "^1",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

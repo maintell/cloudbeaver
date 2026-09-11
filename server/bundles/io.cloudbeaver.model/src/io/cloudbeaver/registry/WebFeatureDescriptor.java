@@ -23,6 +23,7 @@ import org.eclipse.core.runtime.IConfigurationElement;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.model.DBPImage;
 import org.jkiss.dbeaver.model.impl.AbstractContextDescriptor;
+import org.jkiss.utils.CommonUtils;
 
 /**
  * WebFeatureDescriptor
@@ -35,14 +36,15 @@ public class WebFeatureDescriptor extends AbstractContextDescriptor implements D
     private final String label;
     private final String description;
     private final DBPImage icon;
+    private final boolean enabledByDefault;
 
-    public WebFeatureDescriptor(IConfigurationElement config)
-    {
+    public WebFeatureDescriptor(@NotNull IConfigurationElement config) {
         super(config);
         this.id = config.getAttribute("id");
         this.label = config.getAttribute("label");
         this.description = config.getAttribute("description");
         this.icon = iconToImage(config.getAttribute("icon"));
+        this.enabledByDefault = CommonUtils.getBoolean(config.getAttribute("enabledByDefault"), false);
     }
 
     @NotNull
@@ -69,4 +71,12 @@ public class WebFeatureDescriptor extends AbstractContextDescriptor implements D
         return ServletAppUtils.getServletApplication().getAppConfiguration().isFeatureEnabled(this.id);
     }
 
+    @Override
+    public boolean isEnabledByDefault() {
+        return enabledByDefault;
+    }
+
+    public boolean isApplicable() {
+        return true;
+    }
 }

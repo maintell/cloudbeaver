@@ -2,8 +2,9 @@
   "name": "@cloudbeaver/core-cli",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
@@ -26,7 +27,7 @@
     "core-cli-analyzer": "./bin/analyzer.js",
     "core-cli-check-license": "./lib/cli/license-check.js",
     "core-cli-dependency-graph": "./bin/dependency-graph.js",
-    "core-cli-set-version": "./bin/set-version.mjs",
+    "core-cli-set-version": "./bin/set-version.js",
     "core-cli-validate-dependencies": "./lib/cli/validate-dependencies.js"
   },
   "scripts": {
@@ -37,19 +38,18 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "glob": "^11",
+    "glob": "^13",
+    "js-yaml": "^4",
     "tslib": "^2"
   },
   "devDependencies": {
     "@cloudbeaver/tsconfig": "workspace:*",
-    "@swc/core": "^1",
     "@types/js-yaml": "^4",
     "@types/node": "^22",
     "enquirer": "^2",
     "execa": "^9",
-    "glob": "^11",
+    "glob": "^13",
     "hygen": "^6",
-    "js-yaml": "^4",
     "typescript": "^5"
   }
 }

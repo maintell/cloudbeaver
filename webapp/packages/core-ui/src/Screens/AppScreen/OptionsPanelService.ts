@@ -5,7 +5,7 @@
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
-import { makeObservable, observable } from 'mobx';
+import { makeObservable, observable, runInAction } from 'mobx';
 
 import { injectable } from '@cloudbeaver/core-di';
 import { Executor, ExecutorInterrupter, type IExecutionContext, type IExecutor, type IExecutorHandler } from '@cloudbeaver/core-executor';
@@ -14,7 +14,7 @@ import { NavigationService } from './NavigationService.js';
 
 export type OptionsPanelCloseEventData = 'before' | 'after';
 
-@injectable()
+@injectable(() => [NavigationService])
 export class OptionsPanelService {
   active: boolean;
   readonly closeTask: IExecutor<OptionsPanelCloseEventData>;
@@ -46,14 +46,18 @@ export class OptionsPanelService {
     return this.panelComponent();
   }
 
-  async open(component: () => React.FC): Promise<boolean> {
+  async open(component: () => React.FC, setContext?: () => void): Promise<boolean> {
     if (!(await this.close())) {
       return false;
     }
 
-    this.panelComponent = component;
-    this.basePanelComponent = component;
-    this.active = true;
+    runInAction(() => {
+      setContext?.();
+      this.panelComponent = component;
+      this.basePanelComponent = component;
+      this.active = true;
+    });
+
     return true;
   }
 

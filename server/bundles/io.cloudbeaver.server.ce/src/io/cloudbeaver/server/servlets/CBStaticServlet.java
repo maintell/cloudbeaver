@@ -34,7 +34,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.eclipse.jetty.ee10.servlet.DefaultServlet;
+import org.eclipse.jetty.ee11.servlet.DefaultServlet;
 import org.eclipse.jetty.http.HttpHeader;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
@@ -219,8 +219,13 @@ public class CBStaticServlet extends DefaultServlet {
         if (pathInContext.startsWith("/")) {
             pathInContext = pathInContext.substring(1);
         }
+        Path filePath = contentRoot.resolve(pathInContext).normalize();
+        if (!filePath.startsWith(contentRoot)) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        Path filePath = contentRoot.resolve(pathInContext);
         try (InputStream fis = Files.newInputStream(filePath)) {
             IOUtils.copyStream(fis, baos);
         }

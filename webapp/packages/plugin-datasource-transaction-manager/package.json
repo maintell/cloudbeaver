@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-datasource-transaction-manager",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -36,9 +38,10 @@
     "@cloudbeaver/plugin-codemirror6": "workspace:*",
     "@cloudbeaver/plugin-data-grid": "workspace:*",
     "@cloudbeaver/plugin-datasource-context-switch": "workspace:*",
-    "@cloudbeaver/plugin-sql-editor-new": "workspace:*",
+    "@cloudbeaver/plugin-sql-editor-codemirror": "workspace:*",
+    "@cloudbeaver/plugin-tools-panel": "workspace:*",
     "@cloudbeaver/plugin-top-app-bar": "workspace:*",
-    "@dbeaver/js-helpers": "workspace:^",
+    "@dbeaver/js-helpers": "workspace:*",
     "mobx": "^6",
     "mobx-react-lite": "^4",
     "react": "^19",
@@ -49,6 +52,7 @@
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@types/react": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

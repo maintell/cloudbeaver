@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
  */
 package io.cloudbeaver.server.jetty;
 
+import com.google.common.net.InetAddresses;
 import io.cloudbeaver.model.config.CBServerConfig;
 import io.cloudbeaver.server.CBApplication;
 import io.cloudbeaver.utils.ServletAppUtils;
@@ -32,17 +33,28 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+
 public class RequestHostFilter implements Filter {
     private static final Log log = Log.getLog(RequestHostFilter.class);
 
     @NotNull
     private final CBApplication<?> application;
     private final Set<String> excludedPaths = new HashSet<>();
+    private final Set<String> errorPaths = new HashSet<>();
 
-    public RequestHostFilter(@NotNull CBApplication<?> application, @NotNull Set<String> excludedPaths) {
+    public RequestHostFilter(
+        @NotNull CBApplication<?> application,
+        @NotNull Set<String> excludedPaths,
+        @NotNull Set<String> errorPaths
+    ) {
         this.application = application;
         this.excludedPaths.addAll(
             excludedPaths.stream()
+                .map(path -> ServletAppUtils.removeSideSlashes(path.replace("*", "")))
+                .toList()
+        );
+        this.errorPaths.addAll(
+            errorPaths.stream()
                 .map(path -> ServletAppUtils.removeSideSlashes(path.replace("*", "")))
                 .toList()
         );
@@ -50,34 +62,58 @@ public class RequestHostFilter implements Filter {
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        boolean requestAllowed = true;
+
         if (request instanceof HttpServletRequest httpRequest) {
             CBServerConfig serverConfig = application.getServerConfiguration();
             URI originUri;
             try {
-                String origin = ServletAppUtils.getOriginFromRequestOrThrow(httpRequest);
+                String origin = ServletAppUtils.getOriginFromRequest(httpRequest);
                 originUri = URI.create(origin);
             } catch (Exception e) {
                 log.error("Failed to get origin from request", e);
                 chain.doFilter(request, response);
                 return;
             }
+
+            if (CommonUtils.isNotEmpty(originUri.getHost())) {
+                requestAllowed = InetAddresses.isInetAddress(originUri.getHost());
+            } else {
+                log.debug(
+                    "Request origin host is null, request URI - " + originUri +
+                        ", request path - " + httpRequest.getServletPath() +
+                        ", request url - " + httpRequest.getRequestURL()
+                );
+
+            }
+
             String servletPath = httpRequest.getServletPath();
-            if (CommonUtils.isNotEmpty(servletPath)) {
-                for (String excludedPath : excludedPaths) {
-                    if (servletPath.contains(excludedPath)) {
-                        chain.doFilter(request, response);
-                        return;
+            if (!requestAllowed) {
+                if (CommonUtils.isNotEmpty(servletPath)) {
+                    for (String excludedPath : excludedPaths) {
+                        if (servletPath.contains(excludedPath)) {
+                            chain.doFilter(request, response);
+                            return;
+                        }
                     }
                 }
+                requestAllowed = validateHosts(serverConfig, httpRequest, (HttpServletResponse) response, originUri);
             }
-            validateHosts(serverConfig, httpRequest, response, originUri);
-            validateSchema(serverConfig, httpRequest, response, originUri);
-
+            if (requestAllowed) {
+                requestAllowed = validateSchema(serverConfig, httpRequest, (HttpServletResponse) response, originUri);
+            }
         }
-        chain.doFilter(request, response);
+        if (requestAllowed) {
+            chain.doFilter(request, response);
+        }
     }
 
-    private void validateSchema(CBServerConfig serverConfig, HttpServletRequest httpRequest, ServletResponse response, URI originUri) {
+    private boolean validateSchema(
+        @NotNull CBServerConfig serverConfig,
+        @NotNull HttpServletRequest httpRequest,
+        @NotNull HttpServletResponse response,
+        @NotNull URI originUri
+    ) {
         boolean httpsExpected = serverConfig.isForceHttps();
         try {
             if ("http".equals(originUri.getScheme()) && httpsExpected) {
@@ -92,34 +128,51 @@ public class RequestHostFilter implements Filter {
                     redirectUrlBuilder.append("?")
                         .append(httpRequest.getQueryString());
                 }
-                ((HttpServletResponse) response).sendRedirect(redirectUrlBuilder.toString());
-
+                response.sendRedirect(redirectUrlBuilder.toString());
+                return false;
             }
         } catch (Exception e) {
             log.error("Failed to redirect to HTTPS", e);
         }
+        return true;
     }
 
-    private void validateHosts(
+    private boolean validateHosts(
         @NotNull CBServerConfig serverConfig,
         @NotNull HttpServletRequest httpRequest,
-        @NotNull ServletResponse response,
+        @NotNull HttpServletResponse response,
         URI originUri
     ) throws IOException {
         List<String> availableHosts = serverConfig.getSupportedHosts();
         if (CommonUtils.isEmpty(availableHosts)) {
-            return;
+            return true;
         }
         try {
-            String requestHost = originUri.getHost();
+            var requestHostBuilder = new StringBuilder(originUri.getHost());
+            if (originUri.getPort() > -1) {
+                requestHostBuilder.append(':').append(originUri.getPort());
+            }
+            String requestHost = requestHostBuilder.toString();
             if (!availableHosts.contains(requestHost)) {
+                for (String errorPath : errorPaths) {
+                    if (httpRequest.getServletPath().contains(errorPath)) {
+                        log.warn("Request host '" + requestHost + "' is not allowed. Available hosts: " + availableHosts);
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("text/plain;charset=UTF-8");
+                        response.getWriter().write("Request host is not allowed. Available hosts: " + availableHosts);
+                        return false;
+                    }
+                }
                 log.warn("Request host '" + requestHost + "' is not allowed. Redirect to default: " + availableHosts);
-                redirectToDefaultHost((HttpServletResponse) response, httpRequest, availableHosts);
+                redirectToDefaultHost(response, httpRequest, availableHosts);
+                return false;
             }
         } catch (Throwable e) {
             log.error(e.getMessage(), e);
-            redirectToDefaultHost((HttpServletResponse) response, httpRequest, availableHosts);
+            redirectToDefaultHost(response, httpRequest, availableHosts);
+            return false;
         }
+        return true;
     }
 
     private void redirectToDefaultHost(

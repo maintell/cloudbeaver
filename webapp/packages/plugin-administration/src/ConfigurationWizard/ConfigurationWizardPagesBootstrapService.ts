@@ -28,7 +28,16 @@ const ServerConfigurationPage = importLazyComponent(() =>
 const WelcomeDrawerItem = importLazyComponent(() => import('./Welcome/WelcomeDrawerItem.js').then(m => m.WelcomeDrawerItem));
 const WelcomePage = importLazyComponent(() => import('./Welcome/WelcomePage.js').then(m => m.WelcomePage));
 
-@injectable()
+export const WELCOME_WIZARD_PAGE_NAME = 'welcome';
+
+@injectable(() => [
+  AdministrationItemService,
+  ConfigurationWizardService,
+  ServerConfigurationFormStateManager,
+  CommonDialogService,
+  ServerConfigurationService,
+  SessionDataResource,
+])
 export class ConfigurationWizardPagesBootstrapService extends Bootstrap {
   constructor(
     private readonly administrationItemService: AdministrationItemService,
@@ -43,7 +52,7 @@ export class ConfigurationWizardPagesBootstrapService extends Bootstrap {
 
   override register(): void {
     this.administrationItemService.create({
-      name: 'welcome',
+      name: WELCOME_WIZARD_PAGE_NAME,
       type: AdministrationItemType.ConfigurationWizard,
       configurationWizardOptions: {
         description: 'administration_configuration_wizard_welcome_step_description',
@@ -74,7 +83,7 @@ export class ConfigurationWizardPagesBootstrapService extends Bootstrap {
         onConfigurationFinish: async () => {
           const state = this.serverConfigurationFormStateManager.formState;
           if (state) {
-            const saved = await state.save();
+            const saved = await this.serverConfigurationFormStateManager.save();
 
             if (!saved) {
               const error = getFirstException(state.exception);
@@ -111,12 +120,14 @@ export class ConfigurationWizardPagesBootstrapService extends Bootstrap {
         }
 
         if (!configurationWizard && state?.isChanged) {
-          const result = await this.commonDialogService.open(ConfirmationDialog, {
-            title: 'ui_save_reminder',
-            message: 'ui_are_you_sure',
+          const { status } = await this.commonDialogService.open(ConfirmationDialog, {
+            title: 'ui_discard_changes',
+            message: 'ui_discard_changes_message',
+            confirmActionText: 'ui_discard',
+            cancelActionText: 'ui_keep_editing',
           });
 
-          if (result === DialogueStateResult.Rejected) {
+          if (status === DialogueStateResult.Rejected) {
             return false;
           }
         }

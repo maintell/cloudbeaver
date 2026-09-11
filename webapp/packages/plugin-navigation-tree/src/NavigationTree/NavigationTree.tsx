@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2024 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@ import { useService } from '@cloudbeaver/core-di';
 import { NavNodeInfoResource, NavTreeResource, ProjectsNavNodeService, ROOT_NODE_PATH } from '@cloudbeaver/core-navigation-tree';
 import { ProjectsService } from '@cloudbeaver/core-projects';
 import { CaptureView } from '@cloudbeaver/core-view';
+import { useConnectionTypeLoader } from '@cloudbeaver/core-connections';
 
 import { ElementsTreeToolsStyles } from '../index.js';
 import { NavNodeViewService } from '../NodesManager/NavNodeView/NavNodeViewService.js';
@@ -39,6 +40,7 @@ import { navigationTreeProjectsExpandStateGetter } from './ProjectsRenderer/navi
 import { navigationTreeProjectsRendererRenderer } from './ProjectsRenderer/navigationTreeProjectsRendererRenderer.js';
 import { ProjectsSettingsPlaceholderElement } from './ProjectsRenderer/ProjectsSettingsForm.js';
 import { useNavigationTree } from './useNavigationTree.js';
+import { TableContentsSettingsPlaceholderElement } from './ElementsTree/ElementsTreeTools/NavigationTreeSettings/TableContentsSettingsForm.js';
 
 const registry: StyleRegistry = [
   [
@@ -59,6 +61,8 @@ export const NavigationTree = observer(function NavigationTree() {
   const navNodeInfoResource = useService(NavNodeInfoResource);
   const navTreeResource = useService(NavTreeResource);
   const navNodeViewService = useService(NavNodeViewService);
+
+  useConnectionTypeLoader();
 
   const root = ROOT_NODE_PATH;
   const { handleOpen, handleSelect, handleSelectReset } = useNavigationTree();
@@ -86,7 +90,10 @@ export const NavigationTree = observer(function NavigationTree() {
     [projectsNavNodeService, projectsService, navNodeInfoResource, navTreeResource],
   );
 
-  const settingsElements = useMemo(() => [ProjectsSettingsPlaceholderElement, ObjectsDescriptionSettingsPlaceholderElement], []);
+  const settingsElements = useMemo(
+    () => [ProjectsSettingsPlaceholderElement, ObjectsDescriptionSettingsPlaceholderElement, TableContentsSettingsPlaceholderElement],
+    [],
+  );
 
   useExecutor({
     executor: navTreeService.showNodeExecutor,

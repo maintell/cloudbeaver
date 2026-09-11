@@ -8,13 +8,13 @@
   },
   "references": [
     {
-      "path": "../../../common-react/@dbeaver/react-data-grid"
+      "path": "../../common-react/@dbeaver/react-data-grid"
     },
     {
-      "path": "../../../common-react/@dbeaver/ui-kit"
+      "path": "../../common-react/@dbeaver/ui-kit"
     },
     {
-      "path": "../../../common-typescript/@dbeaver/cli"
+      "path": "../../common-typescript/@dbeaver/cli"
     },
     {
       "path": "../core-blocks"
@@ -24,14 +24,16 @@
     },
     {
       "path": "../core-di"
+    },
+    {
+      "path": "../core-localization"
     }
   ],
   "include": [
     "__custom_mocks__/**/*",
     "src/**/*",
     "src/**/*.json",
-    "src/**/*.css",
-    "src/**/*.scss"
+    "src/**/*.css"
   ],
   "exclude": [
     "**/node_modules",

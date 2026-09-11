@@ -24,7 +24,7 @@ import io.cloudbeaver.utils.WebTestUtils;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.utils.SecurityUtils;
-import org.junit.AfterClass;
+import org.junit.jupiter.api.AfterAll;
 
 import java.net.CookieManager;
 import java.net.http.HttpClient;
@@ -43,6 +43,9 @@ public class CEAppStarter {
 
     public static void startServerIfNotStarted() throws Exception {
         System.out.println("Start CBApplication");
+        if (testApp != null) {
+            return;
+        }
         if (DBWorkbench.isPlatformStarted() && DBWorkbench.getPlatform().getApplication() instanceof CBApplication<?>) {
             testApp = (CBApplication<?>) DBWorkbench.getPlatform().getApplication();
             return;
@@ -66,7 +69,7 @@ public class CEAppStarter {
         }
     }
 
-    @AfterClass
+    @AfterAll
     public static void shutdownServer() {
         testApp.stop();
     }
@@ -76,15 +79,16 @@ public class CEAppStarter {
     }
 
     public static WebGQLClient createClient() {
+        CookieManager cookieManager = new CookieManager();
         HttpClient httpClient = HttpClient.newBuilder()
-            .cookieHandler(new CookieManager())
+            .cookieHandler(cookieManager)
             .version(HttpClient.Version.HTTP_2)
             .build();
-        return createClient(httpClient);
+        return createClient(httpClient, cookieManager);
     }
 
-    public static WebGQLClient createClient(@NotNull HttpClient httpClient) {
-        return new WebGQLClient(httpClient, GQL_API_URL);
+    public static WebGQLClient createClient(@NotNull HttpClient httpClient, @NotNull CookieManager cookieManager) {
+        return new WebGQLClient(httpClient, cookieManager, GQL_API_URL);
     }
 
     public static Map<String, Object> authenticateTestUser(@NotNull WebGQLClient client) throws Exception {

@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,30 @@ import {
   CommonDialogFooter,
   CommonDialogHeader,
   CommonDialogWrapper,
-  Container,
-  Fill,
+  useResource,
   useTranslate,
 } from '@cloudbeaver/core-blocks';
+import type { IConnectionInfoParams } from '@cloudbeaver/core-connections';
 import type { DialogComponent } from '@cloudbeaver/core-dialogs';
+import type { DataTransferImportSettings } from '@cloudbeaver/core-sdk';
 
+import { DataImportDriverConfigurationResource } from '../DataImportDriverConfigurationResource.js';
 import { DataImportFileSelector } from './DataImportFileSelector.js';
 import { EDataImportDialogStep } from './EDataImportDialogStep.js';
 import type { IDataImportDialogState } from './IDataImportDialogState.js';
 import { ImportProcessorList } from './ImportProcessorList.js';
+import { ImportSettingsForm } from './ImportSettingsForm.js';
 import { useDataImportDialog } from './useDataImportDialog.js';
 
 export interface IDataImportDialogResult {
   file: File;
   processorId: string;
+  settings: DataTransferImportSettings;
 }
 
 export interface IDataImportDialogPayload {
   tableName: string;
+  connectionKey: IConnectionInfoParams;
   initialState?: IDataImportDialogState;
 }
 
@@ -42,13 +47,23 @@ export const DataImportDialog: DialogComponent<IDataImportDialogPayload, IDataIm
 }) {
   const translate = useTranslate();
   const dialog = useDataImportDialog(payload.initialState);
+  const driverConfigurationResource = useResource(DataImportDialog, DataImportDriverConfigurationResource, payload.connectionKey, { silent: true });
+
+  const driverConfiguration = driverConfigurationResource.tryGetData ?? null;
+  const isSettingsStep = dialog.state.step === EDataImportDialogStep.Settings;
 
   let title = translate('plugin_data_import_title');
   let icon = '/icons/data-import.svg';
 
-  if (dialog.state.step === EDataImportDialogStep.File && dialog.state.selectedProcessor) {
+  if (dialog.state.step !== EDataImportDialogStep.Processor && dialog.state.selectedProcessor) {
     title += ` (${dialog.state.selectedProcessor.name ?? dialog.state.selectedProcessor.id})`;
     icon = dialog.state.selectedProcessor.icon ?? icon;
+  }
+
+  function importData() {
+    if (dialog.state.file && dialog.state.selectedProcessor) {
+      resolveDialog({ file: dialog.state.file, processorId: dialog.state.selectedProcessor.id, settings: dialog.state.settings });
+    }
   }
 
   return (
@@ -57,26 +72,29 @@ export const DataImportDialog: DialogComponent<IDataImportDialogPayload, IDataIm
       <CommonDialogBody noBodyPadding>
         {dialog.state.step === EDataImportDialogStep.Processor && <ImportProcessorList onSelect={dialog.selectProcessor} />}
         {dialog.state.step === EDataImportDialogStep.File && <DataImportFileSelector state={dialog.state} onDelete={dialog.deleteFile} />}
+        {dialog.state.step === EDataImportDialogStep.Settings && driverConfiguration && (
+          <ImportSettingsForm settings={dialog.state.settings} driverConfiguration={driverConfiguration} />
+        )}
       </CommonDialogBody>
 
       <CommonDialogFooter>
-        <Button type="button" variant="secondary" onClick={rejectDialog}>
+        <Button type="button" variant="secondary" onClick={() => rejectDialog()}>
           {translate('ui_processing_cancel')}
         </Button>
-        <Fill />
-        {dialog.state.step === EDataImportDialogStep.File && (
-          <Container noWrap keepSize gap>
+        {dialog.state.step !== EDataImportDialogStep.Processor && (
+          <div className="tw:flex tw:ml-auto tw:gap-2">
             <Button type="button" variant="secondary" onClick={dialog.stepBack}>
               {translate('ui_stepper_back')}
             </Button>
             <Button
               type="button"
+              loading={driverConfigurationResource.isLoading()}
               disabled={!dialog.state.file || !dialog.state.selectedProcessor}
-              onClick={() => resolveDialog({ file: dialog.state.file!, processorId: dialog.state.selectedProcessor!.id })}
+              onClick={isSettingsStep ? importData : () => dialog.goToSettings(driverConfiguration)}
             >
-              {translate('ui_import')}
+              {translate(isSettingsStep ? 'ui_import' : 'ui_stepper_next')}
             </Button>
-          </Container>
+          </div>
         )}
       </CommonDialogFooter>
     </CommonDialogWrapper>

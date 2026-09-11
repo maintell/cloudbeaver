@@ -6,6 +6,7 @@
   "license": "Apache-2.0",
   "exports": {
     ".": "./lib/index.js",
+    "./module": "./lib/module.js",
     "./*": "./lib/*.js"
   },
   "scripts": {
@@ -17,28 +18,32 @@
   },
   "dependencies": {
     "@cloudbeaver/core-di": "workspace:*",
+    "@dbeaver/react-tests": "workspace:*",
+    "@testing-library/dom": "^10",
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16",
+    "@testing-library/user-event": "^14",
     "mobx": "^6",
     "react": "^19",
     "react-dom": "^19",
-    "tslib": "^2"
+    "tslib": "^2",
+    "vitest": "^4"
   },
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "devDependencies": {
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
-    "@dbeaver/cli": "workspace:^",
-    "@testing-library/dom": "^10",
-    "@testing-library/jest-dom": "^6",
-    "@testing-library/react": "^16",
+    "@dbeaver/cli": "workspace:*",
+    "@dbeaver/react-tests": "workspace:*",
     "@types/node": "^22",
     "@types/react": "^19",
-    "fake-indexeddb": "^6",
-    "happy-dom": "^18",
+    "rimraf": "^6",
     "typescript": "^5",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }

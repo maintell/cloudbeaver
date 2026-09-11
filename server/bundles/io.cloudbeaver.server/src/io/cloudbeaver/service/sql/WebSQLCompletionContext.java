@@ -98,12 +98,12 @@ public class WebSQLCompletionContext implements SQLCompletionContext {
 
     @Override
     public boolean isSearchInsideNames() {
-        return false;
+        return true;
     }
 
     @Override
     public boolean isSortAlphabetically() {
-        return false;
+        return true;
     }
 
     @Override

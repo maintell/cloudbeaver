@@ -5,9 +5,8 @@
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
-import { manifest } from './manifest.js';
 
-export default manifest;
+import './module.js';
 
 export * from './AdministrationScreen/AdministrationTopAppBar/AdministrationTopAppBarService.js';
 export * from './AdministrationScreen/ConfigurationWizard/WizardTopAppBar/WizardTopAppBarService.js';
@@ -18,6 +17,9 @@ export * from './ConfigurationWizard/ServerConfiguration/Form/ServerConfiguratio
 export * from './ConfigurationWizard/ServerConfiguration/Form/ServerConfigurationSecurityForm.js';
 export * from './ConfigurationWizard/ServerConfiguration/IServerConfigurationPageState.js';
 export * from './ConfigurationWizard/ServerConfiguration/ServerConfigurationService.js';
+export * from './ConfigurationWizard/ServerConfiguration/getServerConfigurationFormPart.js';
+export * from './ConfigurationWizard/ServerConfiguration/ServerConfigurationFormStateManager.js';
 export * from './ConfigurationWizard/ServerConfigurationAdministrationNavService.js';
 export * from './ConfigurationWizard/ServerConfiguration/ADMINISTRATION_SERVER_CONFIGURATION_ITEM.js';
 export * from './ConfigurationWizard/ServerConfiguration/IServerConfigurationFormPartState.js';
+export { WELCOME_WIZARD_PAGE_NAME } from './ConfigurationWizard/ConfigurationWizardPagesBootstrapService.js';

@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ import { ACTION_NEW_FOLDER, ActionService, type IAction, MenuService } from '@cl
 import {
   DATA_CONTEXT_ELEMENTS_TREE,
   MENU_ELEMENTS_TREE_TOOLS,
+  MENU_NAVIGATION_TREE_CREATE,
   NavigationTreeService,
   TreeSelectionService,
 } from '@cloudbeaver/plugin-navigation-tree';
@@ -62,7 +63,23 @@ import { FolderDialog } from '@cloudbeaver/plugin-projects';
 
 import { ACTION_TREE_CREATE_FOLDER } from '../Actions/ACTION_TREE_CREATE_FOLDER.js';
 
-@injectable()
+@injectable(() => [
+  LocalizationService,
+  UserInfoResource,
+  NavTreeResource,
+  ActionService,
+  MenuService,
+  ConnectionInfoResource,
+  NavNodeManagerService,
+  ConnectionFolderResource,
+  CommonDialogService,
+  NotificationService,
+  NavNodeInfoResource,
+  ProjectInfoResource,
+  ProjectsNavNodeService,
+  NavigationTreeService,
+  TreeSelectionService,
+])
 export class ConnectionFoldersBootstrap extends Bootstrap {
   constructor(
     private readonly localizationService: LocalizationService,
@@ -111,13 +128,13 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
         return;
       }
 
-      const result = await this.commonDialogService.open(ConfirmationDialogDelete, {
+      const { status } = await this.commonDialogService.open(ConfirmationDialogDelete, {
         title: 'ui_data_delete_confirmation',
         message: this.localizationService.translate('plugin_connections_connection_folder_delete_confirmation', undefined, { name: nodes }),
         confirmActionText: 'ui_delete',
       });
 
-      if (result === DialogueStateResult.Rejected) {
+      if (status === DialogueStateResult.Rejected) {
         ExecutorInterrupter.interrupt(contexts);
       } else {
         deleteContext.confirm();
@@ -160,7 +177,7 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
     });
 
     this.menuService.addCreator({
-      root: true,
+      menus: [MENU_NAVIGATION_TREE_CREATE],
       contexts: [DATA_CONTEXT_NAV_NODE, DATA_CONTEXT_ELEMENTS_TREE],
       isApplicable: context => {
         const node = context.get(DATA_CONTEXT_NAV_NODE)!;
@@ -206,16 +223,16 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
 
     const move = contexts.getContext(navNodeMoveContext);
     const nodes = getNodesFromContext(moveContexts);
-    const nodeIdList = nodes.map(node => node.id);
-    const children = this.navTreeResource.get(targetNode.id) ?? [];
-    const targetProject = this.projectsNavNodeService.getProject(targetNode.id);
+    const nodeIdList = nodes.map(node => node.uri);
+    const children = this.navTreeResource.get(targetNode.uri) ?? [];
+    const targetProject = this.projectsNavNodeService.getProject(targetNode.uri);
 
     const supported = nodes.every(node => {
       if (
         ![isConnectionNode, isConnectionFolder, isProjectNode].some(check => check(node)) ||
-        targetProject !== this.projectsNavNodeService.getProject(node.id) ||
-        children.includes(node.id) ||
-        targetNode.id === node.id
+        targetProject !== this.projectsNavNodeService.getProject(node.uri) ||
+        children.includes(node.uri) ||
+        targetNode.uri === node.uri
       ) {
         return false;
       }
@@ -237,7 +254,7 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
         node =>
           isConnectionFolder(node) &&
           (childrenNode.some(child => child && isConnectionFolder(child) && child.name === node.name) ||
-            nodes.some(child => isConnectionFolder(child) && child.name === node.name && child.id !== node.id)),
+            nodes.some(child => isConnectionFolder(child) && child.name === node.name && child.uri !== node.uri)),
       );
 
       if (folderDuplicates.length > 0) {
@@ -251,7 +268,7 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
       }
 
       try {
-        await this.navTreeResource.moveTo(resourceKeyList(nodeIdList), targetNode.id);
+        await this.navTreeResource.moveTo(resourceKeyList(nodeIdList), targetNode.uri);
         const connections = nodeIdList
           .map(nodeId => {
             const connection = this.connectionInfoResource.getConnectionForNode(nodeId);
@@ -297,10 +314,11 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
         let parentFolderParam: IConnectionFolderParam | undefined;
 
         if (targetNode.folderId) {
-          parentFolderParam = getConnectionFolderIdFromNodeId(targetNode.folderId);
+          const node = this.navNodeInfoResource.get(targetNode.folderId);
+          parentFolderParam = node ? getConnectionFolderIdFromNodeId(node) : undefined;
         }
 
-        const result = await this.commonDialogService.open(FolderDialog, {
+        const { status, result } = await this.commonDialogService.open(FolderDialog, {
           value: this.localizationService.translate('ui_folder_new_default_name'),
           projectId: targetNode.projectId,
           folder: parentFolderParam?.folderId,
@@ -327,7 +345,7 @@ export class ConnectionFoldersBootstrap extends Bootstrap {
           },
         });
 
-        if (result !== DialogueStateResult.Rejected && result !== DialogueStateResult.Resolved) {
+        if (status == DialogueStateResult.Resolved && result) {
           try {
             await this.connectionFolderResource.create(result.projectId, result.name, result.folder);
             this.navTreeResource.markOutdated(

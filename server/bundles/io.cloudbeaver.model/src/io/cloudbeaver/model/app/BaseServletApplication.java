@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
  */
 package io.cloudbeaver.model.app;
 
-import io.cloudbeaver.model.cli.CloudBeaverInstanceServer;
 import io.cloudbeaver.model.log.SLF4JLogHandler;
+import io.cloudbeaver.registry.WebFeatureRegistry;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.equinox.app.IApplicationContext;
 import org.jkiss.code.NotNull;
@@ -25,17 +25,18 @@ import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBFileController;
+import org.jkiss.dbeaver.model.app.DBPLockManagerProvider;
 import org.jkiss.dbeaver.model.app.DBPWorkspace;
 import org.jkiss.dbeaver.model.auth.SMCredentialsProvider;
 import org.jkiss.dbeaver.model.auth.SMSessionContext;
-import org.jkiss.dbeaver.model.cli.ApplicationInstanceController;
 import org.jkiss.dbeaver.model.data.json.JSONUtils;
+import org.jkiss.dbeaver.model.fs.lock.LockManager;
+import org.jkiss.dbeaver.model.fs.lock.shared.SharedFileLockManager;
 import org.jkiss.dbeaver.model.impl.app.ApplicationRegistry;
 import org.jkiss.dbeaver.model.impl.app.BaseApplicationImpl;
 import org.jkiss.dbeaver.model.impl.app.BaseWorkspaceImpl;
 import org.jkiss.dbeaver.model.rm.RMController;
 import org.jkiss.dbeaver.model.secret.DBSSecretController;
-import org.jkiss.dbeaver.model.websocket.event.WSEventController;
 import org.jkiss.dbeaver.runtime.IVariableResolver;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
@@ -49,7 +50,7 @@ import java.util.Map;
 /**
  * Servlet application
  */
-public abstract class BaseServletApplication extends BaseApplicationImpl implements ServletApplication {
+public abstract class BaseServletApplication extends BaseApplicationImpl implements ServletApplication, DBPLockManagerProvider {
 
     public static final String DEFAULT_CONFIG_FILE_PATH = "/etc/cloudbeaver.conf";
     public static final String CUSTOM_CONFIG_FOLDER = "custom";
@@ -59,7 +60,8 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
     private static final Log log = Log.getLog(BaseServletApplication.class);
 
     private String instanceId;
-    private CloudBeaverInstanceServer instanceServer;
+
+    @NotNull
     @Override
     public RMController createResourceController(
         @NotNull SMCredentialsProvider credentialsProvider,
@@ -74,10 +76,16 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
         throw new IllegalStateException("File controller is not supported by " + getClass().getSimpleName());
     }
 
-    @Nullable
+    @NotNull
     @Override
-    public Path getDefaultWorkingFolder() {
-        return getServerConfigurationController().getWorkspacePath();
+    public LockManager createLockManager(@NotNull String applicationId, @NotNull Path metadataFolder) throws DBException {
+        return new SharedFileLockManager(applicationId, metadataFolder);
+    }
+
+    @NotNull
+    @Override
+    public LockManager createLockManager() throws DBException {
+        return new SharedFileLockManager(getApplicationInstanceId());
     }
 
     @Override
@@ -162,6 +170,7 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
      * Method returns VoidSecretController instance.
      * Advanced apps may implement it differently.
      */
+    @NotNull
     @Override
     public DBSSecretController getSecretController(
         @NotNull SMCredentialsProvider credentialsProvider,
@@ -176,20 +185,20 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
 
     @SuppressWarnings("unchecked")
     public static void patchConfigurationWithProperties(
-        Map<String, Object> configProps, IVariableResolver varResolver
+        @NotNull Map<String, Object> configProps,
+        @NotNull IVariableResolver varResolver
     ) {
         for (Map.Entry<String, Object> entry : configProps.entrySet()) {
             Object propValue = entry.getValue();
-            if (propValue instanceof String) {
-                entry.setValue(GeneralUtils.replaceVariables((String) propValue, varResolver));
+            if (propValue instanceof String strValue) {
+                entry.setValue(GeneralUtils.replaceVariables(strValue, varResolver));
             } else if (propValue instanceof Map) {
                 patchConfigurationWithProperties((Map<String, Object>) propValue, varResolver);
-            } else if (propValue instanceof List) {
-                List value = (List) propValue;
+            } else if (propValue instanceof List value) {
                 for (int i = 0; i < value.size(); i++) {
                     Object colItem = value.get(i);
-                    if (colItem instanceof String) {
-                        value.set(i, GeneralUtils.replaceVariables((String) colItem, varResolver));
+                    if (colItem instanceof String strItem) {
+                        value.set(i, GeneralUtils.replaceVariables(strItem, varResolver));
                     } else if (colItem instanceof Map) {
                         patchConfigurationWithProperties((Map<String, Object>) colItem, varResolver);
                     }
@@ -198,24 +207,24 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
         }
     }
 
+    @NotNull
     @Override
     public Object start(IApplicationContext context) {
         initializeApplicationServices();
+        setWorkspacePath(getServerConfigurationController().getWorkspacePath());
+
         try {
-            try {
-                this.instanceServer = new CloudBeaverInstanceServer();
-            } catch (Exception e) {
-                log.error("Error initializing instance server", e);
-            }
             startServer();
         } catch (Exception e) {
             log.error(e.getMessage(), e);
+            return EXIT_ERROR_UNSPECIFIED;
         }
-        return null;
+        return EXIT_OK;
     }
 
     protected abstract void startServer() throws DBException;
 
+    @NotNull
     @Override
     public synchronized String getApplicationInstanceId() throws DBException {
         if (instanceId == null) {
@@ -240,26 +249,18 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
         return BaseWorkspaceImpl.readWorkspaceIdProperty();
     }
 
-    @Override
-    public Path getWorkspaceDirectory() {
-        return getServerConfigurationController().getWorkspacePath();
-    }
-
-
+    @NotNull
     public String getApplicationId() {
         try {
             return getApplicationInstanceId();
         } catch (DBException e) {
-            return null;
+            // Fallback to hash code
+            return getClass().getSimpleName() + "#" + hashCode();
         }
     }
 
-    @Override
-    public WSEventController getEventController() {
-        return null;
-    }
-
-    public abstract ServletServerConfigurationController getServerConfigurationController();
+    @NotNull
+    public abstract ServletServerConfigurationController<?> getServerConfigurationController();
 
     @Override
     public boolean isEnvironmentVariablesAccessible() {
@@ -274,9 +275,14 @@ public abstract class BaseServletApplication extends BaseApplicationImpl impleme
         }
     }
 
-    @Nullable
     @Override
-    public ApplicationInstanceController getInstanceServer() {
-        return instanceServer;
+    public boolean isAnonymousAccessEnabled() {
+        return getAppConfiguration().isAnonymousAccessEnabled();
+    }
+
+    @NotNull
+    @Override
+    public WebFeatureRegistry getFeatureRegistry() {
+        return WebFeatureRegistry.getInstance();
     }
 }

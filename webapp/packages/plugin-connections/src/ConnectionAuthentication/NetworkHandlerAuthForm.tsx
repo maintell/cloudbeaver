@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2024 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -8,14 +8,12 @@
 import { observer } from 'mobx-react-lite';
 
 import { FieldCheckbox, GroupTitle, InputField, ObjectPropertyInfoForm, useResource, useTranslate } from '@cloudbeaver/core-blocks';
-import { NetworkHandlerResource, SSH_TUNNEL_ID } from '@cloudbeaver/core-connections';
+import { NetworkHandlerResource, SSH_TUNNEL_ID, SSHKeyUploader } from '@cloudbeaver/plugin-network-handlers';
 import { useService } from '@cloudbeaver/core-di';
 import { ProjectInfoResource } from '@cloudbeaver/core-projects';
 import { ServerConfigResource } from '@cloudbeaver/core-root';
 import { NetworkHandlerAuthType, type NetworkHandlerConfigInput } from '@cloudbeaver/core-sdk';
-
-import { SSHKeyUploader } from '../ConnectionForm/SSH/SSHKeyUploader.js';
-import { PROPERTY_FEATURE_SECURED } from '../ConnectionForm/SSL/PROPERTY_FEATURE_SECURED.js';
+import { PROPERTY_FEATURE_SECURED } from './PROPERTY_FEATURE_SECURED.js';
 
 interface Props {
   id: string;
@@ -77,7 +75,12 @@ export const NetworkHandlerAuthForm = observer<Props>(function NetworkHandlerAut
       )}
       {ssh && keyAuth && <SSHKeyUploader state={state} disabled={disabled} />}
       {!ssh && (
-        <ObjectPropertyInfoForm state={state.secureProperties} properties={properties ?? []} autofillToken="new-password" hideEmptyPlaceholder />
+        <ObjectPropertyInfoForm
+          state={state.secureProperties}
+          properties={properties ?? []}
+          autocompleteSectionName="section-auth"
+          hideEmptyPlaceholder
+        />
       )}
       {allowSaveCredentials && (
         <FieldCheckbox

@@ -5,7 +5,8 @@
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
-export * from './manifest.js';
+
+import './module.js';
 export * from './AdministrationItem/AdministrationItemService.js';
 export * from './AdministrationItem/filterConfigurationWizard.js';
 export * from './AdministrationItem/IAdministrationItem.js';
@@ -18,3 +19,6 @@ export * from './DataContext/DATA_CONTEXT_ADMINISTRATION_ITEM_ROUTE.js';
 export * from './AdministrationLocaleService.js';
 export * from './PermissionsResource.js';
 export * from './ADMINISTRATION_SETTINGS_GROUP.js';
+
+export { default as AdministrationTableStyles } from './AdministrationTable/AdministrationTable.module.css';
+export { ADMINISTRATION_TABLE_DEFAULT_ROW_HEIGHT } from './AdministrationTable/ADMINISTRATION_TABLE_DEFAULT_ROW_HEIGHT.js';

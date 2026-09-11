@@ -77,6 +77,10 @@ public class WebUser {
         return user.getUserTeams();
     }
 
+    public void setTeams(@NotNull String[] teams) {
+        user.setUserTeams(teams);
+    }
+
     @Override
     public int hashCode() {
         return user.getUserId().hashCode();
@@ -109,5 +113,10 @@ public class WebUser {
     @Nullable
     public String getDisableReason() {
         return user.getDisableReason();
+    }
+
+    @Nullable
+    public Instant getLastLoginTime() {
+        return user.getLastLoginTime();
     }
 }

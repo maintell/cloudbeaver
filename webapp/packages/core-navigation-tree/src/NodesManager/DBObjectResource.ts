@@ -30,7 +30,7 @@ import { NavTreeResource } from './NavTreeResource.js';
 
 export const DBObjectParentKey = resourceKeyListAliasFactory('@db-object/parent', (parentId: string) => ({ parentId }));
 
-@injectable()
+@injectable(() => [GraphQLService, NavNodeInfoResource, NavTreeResource])
 export class DBObjectResource extends CachedMapResource<string, DBObject> {
   constructor(
     private readonly graphQLService: GraphQLService,
@@ -113,7 +113,7 @@ export class DBObjectResource extends CachedMapResource<string, DBObject> {
       const dbObjects = await this.loadFromChildren(nodeId, offset, limit);
 
       runInAction(() => {
-        const keys = dbObjects.map(dbObject => dbObject.id);
+        const keys = dbObjects.map(dbObject => dbObject.uri);
         this.set(resourceKeyList(keys), dbObjects);
 
         this.offsetPagination.setPage(

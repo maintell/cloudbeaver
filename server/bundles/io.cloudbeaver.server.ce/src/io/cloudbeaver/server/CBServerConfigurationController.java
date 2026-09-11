@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,7 @@ import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import io.cloudbeaver.model.app.BaseServerConfigurationController;
 import io.cloudbeaver.model.app.BaseServletApplication;
-import io.cloudbeaver.model.config.CBAppConfig;
-import io.cloudbeaver.model.config.CBServerConfig;
-import io.cloudbeaver.model.config.PasswordPolicyConfiguration;
-import io.cloudbeaver.model.config.SMControllerConfiguration;
+import io.cloudbeaver.model.config.*;
 import io.cloudbeaver.utils.ServletAppUtils;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
@@ -44,8 +41,6 @@ import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 
 import java.io.*;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,6 +53,9 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
 
     private static final Log log = Log.getLog(CBServerConfigurationController.class);
 
+    private static final String NETWORK_MODE_ENV = "NETWORK_MODE";
+    private static final String NETWORK_MODE_VALUE_HOST = "host";
+
     // Configurations
     @NotNull
     private final T serverConfiguration;
@@ -66,6 +64,7 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
     protected final Path homeDirectory;
     private final Map<String, String> externalProperties = new LinkedHashMap<>();
     private final Map<String, Object> originalConfigurationProperties = new LinkedHashMap<>();
+    private String localHostAddress;
 
     protected CBServerConfigurationController(@NotNull T serverConfiguration, @NotNull Path homeDirectory) {
         super(homeDirectory);
@@ -80,6 +79,15 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
     @Override
     public void loadServerConfiguration(Path configPath) throws DBException {
         log.debug("Using configuration [" + configPath + "]");
+        // Determine address for local host
+        localHostAddress = System.getenv(CBConstants.VAR_CB_LOCAL_HOST_ADDR);
+        if (CommonUtils.isEmpty(localHostAddress)) {
+            localHostAddress = System.getProperty(CBConstants.VAR_CB_LOCAL_HOST_ADDR);
+        }
+        if (CommonUtils.isEmpty(localHostAddress) || CBConstants.HOST_127_0_0_1.equals(localHostAddress) || "::0".equals(
+            localHostAddress)) {
+            localHostAddress = CBConstants.HOST_LOCALHOST;
+        }
 
         if (!Files.exists(configPath)) {
             log.error("Configuration file " + configPath + " doesn't exist. Use defaults.");
@@ -91,18 +99,7 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
         Path runtimeConfigPath = getRuntimeAppConfigPath();
         if (Files.exists(runtimeConfigPath)) {
             log.debug("Runtime configuration [" + runtimeConfigPath.toAbsolutePath() + "]");
-            Map<String, Object> runtimeConfigMap = loadConfiguration(runtimeConfigPath);
-            Map<String, Object> serverConfigMap = JSONUtils.getObject(runtimeConfigMap, CBConstants.PARAM_SERVER_CONFIGURATION);
-            if (!serverConfigMap.containsKey(CBConstants.PARAM_FORCE_HTTPS)) {
-                CBServerConfig serverConfig = getServerConfiguration();
-                // enable https for legacy configurations
-                if (CommonUtils.isEmpty(serverConfig.getSupportedHosts())
-                    && CommonUtils.isNotEmpty(serverConfig.getServerURL())
-                    && serverConfig.getServerURL().startsWith("https://")
-                ) {
-                    serverConfig.setForceHttps(true);
-                }
-            }
+            loadConfiguration(runtimeConfigPath);
         }
 
         // Set default preferences
@@ -170,17 +167,9 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
 
     public T parseServerConfiguration() {
         var config = getServerConfiguration();
-        if (config.getServerURL() == null) {
-            String hostName = config.getServerHost();
-            if (CommonUtils.isEmpty(hostName)) {
-                try {
-                    hostName = InetAddress.getLocalHost().getHostName();
-                } catch (UnknownHostException e) {
-                    log.debug("Error resolving localhost address: " + e.getMessage());
-                    hostName = CBConstants.HOST_LOCALHOST;
-                }
-            }
-            config.setServerURL("http://" + hostName + ":" + config.getServerPort());
+        if (NETWORK_MODE_VALUE_HOST.equalsIgnoreCase(System.getenv(NETWORK_MODE_ENV))) {
+            String hostName = getLocalHostAddress();
+            config.setServerHost(hostName);
         }
 
         config.setContentRoot(ServletAppUtils.getRelativePath(config.getContentRoot(), homeDirectory));
@@ -382,6 +371,7 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
         try (Writer out = new OutputStreamWriter(Files.newOutputStream(runtimeConfigPath), StandardCharsets.UTF_8)) {
             Gson gson = new GsonBuilder()
                 .setStrictness(Strictness.LENIENT)
+                .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE)
                 .setPrettyPrinting()
                 .create();
             gson.toJson(configurationProperties, out);
@@ -389,12 +379,6 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
         } catch (IOException e) {
             throw new DBException("Error writing runtime configuration", e);
         }
-    }
-
-
-    public synchronized void updateServerUrl(@NotNull SMCredentialsProvider credentialsProvider,
-        @Nullable String newPublicUrl) throws DBException {
-        getServerConfiguration().setServerURL(newPublicUrl);
     }
 
     protected Map<String, Object> collectConfigurationProperties(
@@ -503,6 +487,7 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
                 }
             }
             appConfigProperties.put("enabledFeatures", Arrays.asList(appConfig.getEnabledFeatures()));
+            appConfigProperties.put("disabledFeatures", Arrays.asList(appConfig.getDisabledFeatures()));
             if (appConfig.getEnabledAuthProviders() != null) {
                 appConfigProperties.put("enabledAuthProviders", Arrays.asList(appConfig.getEnabledAuthProviders()));
             }
@@ -522,7 +507,7 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
     @NotNull
     protected Map<String, Object> collectServerConfigProperties(
         @NotNull CBServerConfig serverConfig,
-        Map<String, Object> originServerConfig
+        @NotNull Map<String, Object> originServerConfig
     ) {
         var serverConfigProperties = new LinkedHashMap<String, Object>();
         if (!CommonUtils.isEmpty(serverConfig.getServerName())) {
@@ -530,10 +515,6 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
                 serverConfigProperties,
                 CBConstants.PARAM_SERVER_NAME,
                 serverConfig.getServerName());
-        }
-        if (!CommonUtils.isEmpty(serverConfig.getServerURL())) {
-            copyConfigValue(
-                originServerConfig, serverConfigProperties, CBConstants.PARAM_SERVER_URL, serverConfig.getServerURL());
         }
         if (serverConfig.getMaxSessionIdleTime() > 0) {
             copyConfigValue(
@@ -553,6 +534,12 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
             serverConfigProperties,
             CBConstants.PARAM_SUPPORTED_HOSTS,
             serverConfig.getSupportedHosts()
+        );
+        copyConfigValue(
+            originServerConfig,
+            serverConfigProperties,
+            CBConstants.PARAM_BIND_SESSION_TO_IP,
+            serverConfig.getBindSessionToIp()
         );
         var productConfigProperties = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         Map<String, Object> oldProductRuntimeConfig = JSONUtils.getObject(originServerConfig,
@@ -645,6 +632,9 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
         return serverConfiguration;
     }
 
+    @NotNull
+    public abstract CBServerConfigurationMapper<T, ? extends AdminServerConfig> createServerConfigurationInputMapper();
+
     public CBAppConfig getAppConfiguration() {
         return appConfiguration;
     }
@@ -673,5 +663,9 @@ public abstract class CBServerConfigurationController<T extends CBServerConfig>
     @Override
     public void validateFinalServerConfiguration() throws DBException {
 
+    }
+
+    public String getLocalHostAddress() {
+        return localHostAddress;
     }
 }

@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-navigation-tabs",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -23,6 +25,7 @@
     "@cloudbeaver/core-app": "workspace:*",
     "@cloudbeaver/core-authentication": "workspace:*",
     "@cloudbeaver/core-blocks": "workspace:*",
+    "@cloudbeaver/core-connections": "workspace:*",
     "@cloudbeaver/core-di": "workspace:*",
     "@cloudbeaver/core-events": "workspace:*",
     "@cloudbeaver/core-executor": "workspace:*",
@@ -30,12 +33,13 @@
     "@cloudbeaver/core-localization": "workspace:*",
     "@cloudbeaver/core-projects": "workspace:*",
     "@cloudbeaver/core-resource": "workspace:*",
-    "@cloudbeaver/core-root": "workspace:*",
     "@cloudbeaver/core-settings": "workspace:*",
     "@cloudbeaver/core-storage": "workspace:*",
     "@cloudbeaver/core-ui": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
     "@cloudbeaver/core-view": "workspace:*",
+    "@dbeaver/js-helpers": "workspace:*",
+    "@dbeaver/ui-kit": "workspace:*",
     "mobx": "^6",
     "mobx-react-lite": "^4",
     "react": "^19",
@@ -46,6 +50,7 @@
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@types/react": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

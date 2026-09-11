@@ -5,6 +5,7 @@
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
+import { defineConfig } from 'eslint/config';
 import cloudbeaverPlugin from '@cloudbeaver/eslint-plugin';
 import pluginReact from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -12,8 +13,10 @@ import tseslint from 'typescript-eslint';
 import eslint from '@eslint/js';
 import stylistic from '@stylistic/eslint-plugin';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import storybook from 'eslint-plugin-storybook';
 
-export default tseslint.config(
+export default defineConfig(
+  storybook.configs['flat/recommended'],
   eslint.configs.recommended,
   tseslint.configs.recommended,
   pluginReact.configs.flat.recommended,
@@ -57,6 +60,7 @@ export default tseslint.config(
       'no-inner-declarations': 'off',
       'no-constant-condition': 'off',
       'space-before-blocks': 'error',
+      'func-names': ['error', 'always'],
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'no-unsafe-finally': 'error',
       'require-await': 'error',
@@ -88,6 +92,18 @@ export default tseslint.config(
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/naming-convention': [
+        'error',
+        {
+          selector: 'interface',
+          modifiers: ['exported'],
+          format: ['PascalCase'],
+          custom: {
+            regex: '^I[A-Z]',
+            match: true,
+          },
+        },
+      ],
       '@stylistic/semi': ['error', 'always'],
       '@typescript-eslint/consistent-type-assertions': [
         'error',
@@ -238,6 +254,6 @@ export default tseslint.config(
   },
   {
     files: ['**/*.cjs'],
-    ignores: ['**/lib'],
+    ignores: ['**/lib', '!.storybook'],
   },
 );

@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ public abstract class BaseServletPlatform extends BasePlatformImpl {
         if (tempFolder == null) {
             synchronized (this) {
                 if (tempFolder == null) {
-                    initTempFolder(monitor);
+                    initTempFolder();
                 }
             }
         }
@@ -56,11 +56,11 @@ public abstract class BaseServletPlatform extends BasePlatformImpl {
         return folder;
     }
 
+    @NotNull
     public abstract ServletApplication getApplication();
 
-    private void initTempFolder(@NotNull DBRProgressMonitor monitor) {
+    private void initTempFolder() {
         // Make temp folder
-        monitor.subTask("Create temp folder");
         String sysTempFolder = System.getProperty(StandardConstants.ENV_TMP_DIR);
         if (CommonUtils.isNotEmpty(sysTempFolder)) {
             tempFolder = Path.of(sysTempFolder).resolve(BASE_TEMP_DIR).resolve(DBWConstants.WORK_DATA_FOLDER_NAME);
@@ -68,13 +68,15 @@ public abstract class BaseServletPlatform extends BasePlatformImpl {
             //we do not use workspace because it can be in external file system
             tempFolder = getApplication().getHomeDirectory().resolve(DBWConstants.WORK_DATA_FOLDER_NAME);
         }
+        log.debug("Temp folder: " + tempFolder);
     }
 
     public synchronized void dispose() {
+        super.dispose();
         // Remove temp folder
         if (tempFolder != null) {
 
-            if (!ContentUtils.deleteFileRecursive(tempFolder.toFile())) {
+            if (!ContentUtils.deleteFileRecursive(tempFolder)) {
                 log.warn("Can't delete temp folder '" + tempFolder.toAbsolutePath() + "'");
             }
             tempFolder = null;

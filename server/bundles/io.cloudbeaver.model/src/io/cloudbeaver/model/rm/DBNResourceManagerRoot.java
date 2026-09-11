@@ -50,6 +50,7 @@ public class DBNResourceManagerRoot extends DBNNode implements DBPHiddenObject, 
         return resourceController;
     }
 
+    @NotNull
     @Override
     public String getNodeType() {
         return "rm";
@@ -61,16 +62,19 @@ public class DBNResourceManagerRoot extends DBNNode implements DBPHiddenObject, 
         return "rm";
     }
 
+    @NotNull
     @Override
     public String getNodeDisplayName() {
         return "resources";
     }
 
+    @Nullable
     @Override
     public String getNodeDescription() {
         return "Resources";
     }
 
+    @Nullable
     @Override
     public DBPImage getNodeIcon() {
         return null;
@@ -81,6 +85,7 @@ public class DBNResourceManagerRoot extends DBNNode implements DBPHiddenObject, 
         return true;
     }
 
+    @Nullable
     @Override
     public DBNResourceManagerProject[] getChildren(@NotNull DBRProgressMonitor monitor) throws DBException {
         if (projects == null && !monitor.isForceCacheUsage()) {
@@ -110,15 +115,9 @@ public class DBNResourceManagerRoot extends DBNNode implements DBPHiddenObject, 
         return projects;
     }
 
-    @Deprecated
+    @Nullable
     @Override
-    public String getNodeItemPath() {
-        // Path doesn't include project name
-        return NodePathType.ext.getPrefix() + getNodeDisplayName();
-    }
-
-    @Override
-    public DBNNode refreshNode(DBRProgressMonitor monitor, Object source) throws DBException {
+    public DBNNode refreshNode(@NotNull DBRProgressMonitor monitor, @Nullable Object source) throws DBException {
         projects = null;
         return this;
     }
@@ -140,6 +139,9 @@ public class DBNResourceManagerRoot extends DBNNode implements DBPHiddenObject, 
                 break;
             case PROJECT_ADD:
                 addProjectNode(event.getProject());
+                break;
+            case PROJECT_UPDATE:
+                updateProjectNode(event.getProject());
                 break;
         }
     }
@@ -186,5 +188,15 @@ public class DBNResourceManagerRoot extends DBNNode implements DBPHiddenObject, 
 
     private void addProjectNode(RMProject project) {
         projects = ArrayUtils.add(DBNResourceManagerProject.class, projects, new DBNResourceManagerProject(this, project));
+    }
+
+    private void updateProjectNode(@NotNull RMProject project) {
+        var projectNode = getProjectNode(project);
+        projectNode.ifPresent(
+            dbnResourceManagerProject -> {
+                dbnResourceManagerProject.getProject().setName(project.getName());
+                dbnResourceManagerProject.getProject().setDescription(project.getDescription());
+            }
+        );
     }
 }

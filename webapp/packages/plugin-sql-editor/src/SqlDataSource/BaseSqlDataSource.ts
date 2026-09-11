@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -17,22 +17,26 @@ import { ESqlDataSourceFeatures } from './ESqlDataSourceFeatures.js';
 import type { ISetScriptData, ISqlDataSource, ISqlDataSourceKey, ISqlEditorCursor } from './ISqlDataSource.js';
 import type { ISqlDataSourceHistory } from './SqlDataSourceHistory/ISqlDataSourceHistory.js';
 import { SqlDataSourceHistory } from './SqlDataSourceHistory/SqlDataSourceHistory.js';
+import type { TLocalizationToken } from '@cloudbeaver/core-localization';
 
 const SOURCE_HISTORY = 'history';
 
 @staticImplements<ISqlDataSourceKey>()
-export abstract class BaseSqlDataSource implements ISqlDataSource {
+export abstract class BaseSqlDataSource<TDataSource extends QueryDataSource = QueryDataSource> implements ISqlDataSource<TDataSource> {
   static key = 'base';
 
   abstract get name(): string | null;
-  message?: string;
+  get message(): TLocalizationToken | undefined {
+    return undefined;
+  }
+  loadingMessage?: TLocalizationToken;
 
   abstract get script(): string;
   abstract get baseScript(): string;
 
-  abstract get baseExecutionContext(): IConnectionExecutionContextInfo | undefined;
   abstract get executionContext(): IConnectionExecutionContextInfo | undefined;
-  databaseModels: IDatabaseDataModel<QueryDataSource>[];
+  abstract get baseExecutionContext(): IConnectionExecutionContextInfo | undefined;
+  databaseModels: IDatabaseDataModel<TDataSource>[];
   incomingScript: string | undefined;
   incomingExecutionContext: IConnectionExecutionContextInfo | undefined | null;
   exception?: Error | Error[] | null | undefined;
@@ -77,7 +81,7 @@ export abstract class BaseSqlDataSource implements ISqlDataSource {
   readonly history: ISqlDataSourceHistory;
   readonly onUpdate: ISyncExecutor;
   readonly onSetScript: ISyncExecutor<ISetScriptData>;
-  readonly onDatabaseModelUpdate: ISyncExecutor<IDatabaseDataModel<QueryDataSource>[]>;
+  readonly onDatabaseModelUpdate: ISyncExecutor<IDatabaseDataModel<TDataSource>[]>;
 
   protected get features(): ESqlDataSourceFeatures[] {
     return [ESqlDataSourceFeatures.script, ESqlDataSourceFeatures.query, ESqlDataSourceFeatures.executable];
@@ -87,13 +91,13 @@ export abstract class BaseSqlDataSource implements ISqlDataSource {
   protected editing: boolean;
   protected innerCursorState: ISqlEditorCursor;
 
-  constructor(icon = '/icons/sql_script_m.svg') {
+  constructor(icon = '/icons/sql_script_temp_m.svg') {
     this.icon = icon;
     this.databaseModels = [];
     this.incomingScript = undefined;
     this.incomingExecutionContext = null;
     this.exception = undefined;
-    this.message = undefined;
+    this.loadingMessage = undefined;
     this.outdated = true;
     this.editing = true;
     this.innerCursorState = { anchor: 0, head: 0 };
@@ -144,7 +148,8 @@ export abstract class BaseSqlDataSource implements ISqlDataSource {
       databaseModels: observable.ref,
       exception: observable.ref,
       outdated: observable.ref,
-      message: observable.ref,
+      message: computed,
+      loadingMessage: observable.ref,
       editing: observable.ref,
       innerCursorState: observable.ref,
       incomingScript: observable.ref,
@@ -161,13 +166,9 @@ export abstract class BaseSqlDataSource implements ISqlDataSource {
 
   setIncomingScript(script: string): void {
     if (script !== this.baseScript) {
-      if (this.script === this.baseScript) {
-        this.setBaseScript(script);
-        this.setScript(script);
-      } else {
-        this.incomingScript = script;
-      }
+      this.incomingScript = script;
     } else {
+      this.setBaseScript(script);
       this.incomingScript = undefined;
     }
   }

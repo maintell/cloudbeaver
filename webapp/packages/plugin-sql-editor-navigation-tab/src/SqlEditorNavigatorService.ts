@@ -57,7 +57,16 @@ export interface SQLEditorAction extends SQLEditorActionContext {
   resultId: string;
 }
 
-@injectable()
+@injectable(() => [
+  NavigationTabsService,
+  NotificationService,
+  SqlEditorTabService,
+  SqlResultTabsService,
+  ConnectionInfoResource,
+  NavigationService,
+  SqlDataSourceService,
+  SqlQueryService,
+])
 export class SqlEditorNavigatorService {
   private readonly navigator: IExecutor<SQLCreateAction | SQLEditorAction>;
 
@@ -107,6 +116,16 @@ export class SqlEditorNavigatorService {
     }
 
     await this.sqlQueryService.executeEditorQuery(currentTab.handlerState, query, isNewTab);
+  }
+
+  async executeQueries(editorId: string, queries: string[]): Promise<void> {
+    const currentTab = this.navigationTabsService.findTab(isSQLEditorTab(tab => tab.id === editorId));
+
+    if (!currentTab) {
+      throw new Error(`SQL Editor tab with id "${editorId}" not found.`);
+    }
+
+    await this.sqlQueryService.executeQueries(currentTab.handlerState, queries);
   }
 
   private async navigateHandler(data: SQLCreateAction | SQLEditorAction, contexts: IExecutionContextProvider<SQLCreateAction | SQLEditorAction>) {

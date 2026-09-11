@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
  */
 package io.cloudbeaver.model.app;
 
+import io.cloudbeaver.registry.WebFeatureRegistry;
 import org.jkiss.code.NotNull;
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.DBFileController;
 import org.jkiss.dbeaver.model.app.DBPApplication;
@@ -42,14 +44,16 @@ public interface ServletApplication extends DBPApplication {
         return false;
     }
 
+    @NotNull
     ServletAppConfiguration getAppConfiguration();
 
+    @NotNull
     ServletServerConfiguration getServerConfiguration();
 
+    @NotNull
     Path getDataDirectory(boolean create);
 
-    Path getWorkspaceDirectory();
-
+    @NotNull
     Path getHomeDirectory();
 
     boolean isMultiNode();
@@ -58,30 +62,35 @@ public interface ServletApplication extends DBPApplication {
 
     SMAdminController getAdminSecurityController(@NotNull SMCredentialsProvider credentialsProvider) throws DBException;
 
+    @NotNull
     DBSSecretController getSecretController(
         @NotNull SMCredentialsProvider credentialsProvider,
         SMSessionContext smSessionContext
     ) throws DBException;
 
+    @NotNull
     RMController createResourceController(
         @NotNull SMCredentialsProvider credentialsProvider,
         @NotNull DBPWorkspace workspace
     ) throws DBException;
 
+    @NotNull
     DBFileController createFileController(@NotNull SMCredentialsProvider credentialsProvider);
 
-    String getServerURL();
-
+    @NotNull
     default String getServicesURI() {
         return "/";
     }
 
+    @NotNull
     default String getRootURI() {
         return "";
     }
 
+    @NotNull
     String getApplicationInstanceId() throws DBException;
 
+    @NotNull
     WSEventController getEventController();
 
     /**
@@ -94,10 +103,18 @@ public interface ServletApplication extends DBPApplication {
     /**
      * Collector that contains information about system.
      */
-    @NotNull
-    ServletSystemInformationCollector getSystemInformationCollector();
+    @Nullable
+    ServletSystemInformationCollector<?> getSystemInformationCollector();
 
-    default void getStatusInfo(Map<String, Object> infoMap) {
+    default void getStatusInfo(@NotNull Map<String, Object> infoMap) {
 
     }
+
+    boolean isAnonymousAccessEnabled();
+
+    /**
+     * Web feature registry
+     */
+    @NotNull
+    WebFeatureRegistry getFeatureRegistry();
 }

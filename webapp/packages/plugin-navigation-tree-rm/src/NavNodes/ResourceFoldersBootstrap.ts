@@ -52,7 +52,22 @@ import { getResourceKeyFromNodeId } from './getResourceKeyFromNodeId.js';
 import { getResourceNodeId } from './getResourceNodeId.js';
 import { getRmProjectNodeId } from './getRmProjectNodeId.js';
 
-@injectable()
+@injectable(() => [
+  LocalizationService,
+  NavTreeResource,
+  NotificationService,
+  UserInfoResource,
+  NavNodeManagerService,
+  ResourceManagerResource,
+  ResourceManagerService,
+  ProjectInfoResource,
+  CommonDialogService,
+  ActionService,
+  MenuService,
+  NavResourceNodeService,
+  TreeSelectionService,
+  ProjectsNavNodeService,
+])
 export class ResourceFoldersBootstrap extends Bootstrap {
   constructor(
     private readonly localizationService: LocalizationService,
@@ -121,9 +136,9 @@ export class ResourceFoldersBootstrap extends Bootstrap {
   private async moveResourceToFolder({ type, targetNode, moveContexts }: INodeMoveData, contexts: IExecutionContextProvider<INodeMoveData>) {
     const move = contexts.getContext(navNodeMoveContext);
     const nodes = getNodesFromContext(moveContexts);
-    const nodeIdList = nodes.map(node => node.id);
-    const children = this.navTreeResource.get(targetNode.id) ?? [];
-    const targetProject = this.projectsNavNodeService.getProject(targetNode.id);
+    const nodeIdList = nodes.map(node => node.uri);
+    const children = this.navTreeResource.get(targetNode.uri) ?? [];
+    const targetProject = this.projectsNavNodeService.getProject(targetNode.uri);
 
     if (!targetProject?.canEditResources || (!targetNode.folder && targetNode.nodeType !== NAV_NODE_TYPE_RM_PROJECT)) {
       return;
@@ -132,9 +147,9 @@ export class ResourceFoldersBootstrap extends Bootstrap {
     const supported = nodes.every(node => {
       if (
         ![NAV_NODE_TYPE_RM_PROJECT, NAV_NODE_TYPE_RM_RESOURCE].includes(node.nodeType!) ||
-        targetProject !== this.projectsNavNodeService.getProject(node.id) ||
-        children.includes(node.id) ||
-        targetNode.id === node.id
+        targetProject !== this.projectsNavNodeService.getProject(node.uri) ||
+        children.includes(node.uri) ||
+        targetNode.uri === node.uri
       ) {
         return false;
       }
@@ -150,7 +165,7 @@ export class ResourceFoldersBootstrap extends Bootstrap {
       move.setCanMove(true);
     } else {
       try {
-        const targetRmFolderId = getResourceKeyFromNodeId(targetNode.id);
+        const targetRmFolderId = getResourceKeyFromNodeId(targetNode.uri);
 
         if (targetRmFolderId) {
           for (const nodeId of nodeIdList) {
@@ -200,7 +215,7 @@ export class ResourceFoldersBootstrap extends Bootstrap {
           }
         }
 
-        const result = await this.commonDialogService.open(FolderDialog, {
+        const { status, result } = await this.commonDialogService.open(FolderDialog, {
           value: this.localizationService.translate('ui_folder_new'),
           projectId: targetNode.projectId,
           folder: path,
@@ -231,7 +246,7 @@ export class ResourceFoldersBootstrap extends Bootstrap {
           },
         });
 
-        if (result !== DialogueStateResult.Rejected && result !== DialogueStateResult.Resolved) {
+        if (status === DialogueStateResult.Resolved && result !== undefined) {
           try {
             const root = this.getResourceTypeFolder(result.projectId, resourceTypeId);
             const key = getRmResourcePath(result.projectId, result.folder ?? root);

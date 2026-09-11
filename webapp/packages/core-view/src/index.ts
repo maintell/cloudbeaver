@@ -1,10 +1,12 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
+
+import './module.js';
 export * from './Action/Actions/ACTION_ADD.js';
 export * from './Action/Actions/ACTION_CANCEL.js';
 export * from './Action/Actions/ACTION_COLLAPSE_ALL.js';
@@ -35,6 +37,10 @@ export * from './Action/KeyBinding/Bindings/KEY_BINDING_OPEN_IN_TAB.js';
 export * from './Action/KeyBinding/Bindings/KEY_BINDING_REDO.js';
 export * from './Action/KeyBinding/Bindings/KEY_BINDING_UNDO.js';
 export * from './Action/KeyBinding/Bindings/KEY_BINDING_SAVE.js';
+export * from './Action/KeyBinding/Bindings/KEY_BINDING_ADD.js';
+export * from './Action/KeyBinding/Bindings/KEY_BINDING_DUPLICATE.js';
+export * from './Action/KeyBinding/Bindings/KEY_BINDING_DELETE.js';
+export * from './Action/KeyBinding/Bindings/KEY_BINDING_REVERT.js';
 export * from './Action/KeyBinding/KeyBindingService.js';
 export * from './Action/KeyBinding/createKeyBinding.js';
 export * from './Action/ActionService.js';
@@ -69,6 +75,8 @@ export * from './Menu/DATA_CONTEXT_SUBMENU_ITEM.js';
 export * from './Menu/IMenu.js';
 export * from './Menu/IMenuInfo.js';
 export * from './Menu/menuExtractItems.js';
+export * from './Menu/menuItemsPlaceAfter.js';
+export * from './Menu/getMenuLabelClipped.js';
 export * from './Menu/MenuService.js';
 export * from './Menu/useMenu.js';
 export * from './Menu/useMenuContext.js';
@@ -78,8 +86,8 @@ export * from './View/CaptureViewLazy.js';
 export * from './View/CaptureViewContext.js';
 export * from './View/IActiveView.js';
 export * from './View/IView.js';
+export * from './View/parseHotkey.js';
 export * from './View/useActiveView.js';
 export * from './View/useCaptureViewContext.js';
 export * from './View/View.js';
 export * from './View/ViewService.js';
-export { manifest as coreViewManifest } from './manifest.js';

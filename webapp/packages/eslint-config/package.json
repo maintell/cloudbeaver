@@ -2,8 +2,9 @@
   "name": "@cloudbeaver/eslint-config",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
@@ -27,7 +28,9 @@
     "eslint": "^9",
     "eslint-config-prettier": "^10",
     "eslint-plugin-react": "^7",
-    "eslint-plugin-react-hooks": "^5",
+    "eslint-plugin-react-hooks": "^7",
+    "eslint-plugin-storybook": "^10",
+    "storybook": "^10",
     "typescript-eslint": "^8"
   }
 }

@@ -9,17 +9,13 @@
   "references": [
     {
       "path": "../core-cli"
-    },
-    {
-      "path": "../core-di"
     }
   ],
   "include": [
     "__custom_mocks__/**/*",
     "src/**/*",
     "src/**/*.json",
-    "src/**/*.css",
-    "src/**/*.scss"
+    "src/**/*.css"
   ],
   "exclude": [
     "**/node_modules",

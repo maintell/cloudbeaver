@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,14 @@
  */
 package io.cloudbeaver.service.admin.impl;
 
-import io.cloudbeaver.DBWFeatureSet;
-import io.cloudbeaver.DBWebException;
-import io.cloudbeaver.WebProjectImpl;
-import io.cloudbeaver.WebServiceUtils;
+import io.cloudbeaver.*;
 import io.cloudbeaver.auth.provider.local.LocalAuthProvider;
 import io.cloudbeaver.model.WebPropertyInfo;
-import io.cloudbeaver.model.config.CBAppConfig;
-import io.cloudbeaver.model.config.CBServerConfig;
 import io.cloudbeaver.model.session.WebAuthInfo;
 import io.cloudbeaver.model.session.WebSession;
 import io.cloudbeaver.model.user.WebUser;
 import io.cloudbeaver.registry.*;
-import io.cloudbeaver.server.CBApplication;
-import io.cloudbeaver.server.CBConstants;
-import io.cloudbeaver.server.WebAppUtils;
+import io.cloudbeaver.server.*;
 import io.cloudbeaver.service.DBWServiceServerConfigurator;
 import io.cloudbeaver.service.admin.*;
 import io.cloudbeaver.service.security.SMUtils;
@@ -40,19 +33,24 @@ import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBConstants;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.app.DBPProject;
-import org.jkiss.dbeaver.model.auth.AuthInfo;
-import org.jkiss.dbeaver.model.connection.DBPDriver;
+import org.jkiss.dbeaver.model.auth.SMAuthConfiguration;
+import org.jkiss.dbeaver.model.auth.SMObjectType;
 import org.jkiss.dbeaver.model.navigator.DBNBrowseSettings;
 import org.jkiss.dbeaver.model.preferences.DBPPropertyDescriptor;
 import org.jkiss.dbeaver.model.rm.RMProjectType;
 import org.jkiss.dbeaver.model.secret.DBSSecretController;
-import org.jkiss.dbeaver.model.security.*;
+import org.jkiss.dbeaver.model.security.SMAuthProviderCustomConfiguration;
+import org.jkiss.dbeaver.model.security.SMConstants;
+import org.jkiss.dbeaver.model.security.SMDataSourceGrant;
+import org.jkiss.dbeaver.model.security.SMSubjectType;
 import org.jkiss.dbeaver.model.security.user.SMTeam;
 import org.jkiss.dbeaver.model.security.user.SMUser;
 import org.jkiss.dbeaver.utils.GeneralUtils;
+import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.text.MessageFormat;
@@ -163,7 +161,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         if (userName.isEmpty()) {
             throw new DBWebException("Empty user name");
         }
-        String userId = userName.toLowerCase();
+        String userId = userName.trim().toLowerCase();
         try {
             GeneralUtils.validateResourceNameUnconditionally(userId);
         } catch (DBException e) {
@@ -192,7 +190,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public boolean deleteUser(@NotNull WebSession webSession, String userName) throws DBWebException {
+    public boolean deleteUser(@NotNull WebSession webSession, @NotNull String userName) throws DBWebException {
         if (CommonUtils.equalObjects(userName, webSession.getUser().getUserId())) {
             throw new DBWebException("You cannot delete yourself");
         }
@@ -252,7 +250,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
 
     @NotNull
     @Override
-    public AdminTeamInfo updateTeam(@NotNull WebSession webSession, String teamId, String teamName, String description) throws DBWebException {
+    public AdminTeamInfo updateTeam(@NotNull WebSession webSession, @NotNull String teamId, @NotNull String teamName, @Nullable String description) throws DBWebException {
         if (teamId.isEmpty()) {
             throw new DBWebException("Empty team ID");
         }
@@ -269,7 +267,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public boolean deleteTeam(@NotNull WebSession webSession, String teamId, boolean force) throws DBWebException {
+    public boolean deleteTeam(@NotNull WebSession webSession, @NotNull String teamId, boolean force) throws DBWebException {
         try {
             webSession.addInfoMessage("Delete team - " + teamId);
 
@@ -290,15 +288,10 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public boolean grantUserTeam(@NotNull WebSession webSession, String user, String team) throws DBWebException {
+    public boolean grantUserTeam(@NotNull WebSession webSession, @NotNull String user, @NotNull String team) throws DBWebException {
         WebUser grantor = webSession.getUser();
         if (grantor == null) {
             throw new DBWebException("Cannot grant team in anonymous mode");
-        }
-        if (!ServletAppUtils.getServletApplication().isDistributed()
-            && CommonUtils.equalObjects(user, webSession.getUser().getUserId())
-        ) {
-            throw new DBWebException("You cannot edit your own permissions");
         }
         try {
             var adminSecurityController = webSession.getAdminSecurityController();
@@ -311,15 +304,13 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public boolean revokeUserTeam(@NotNull WebSession webSession, String user, String team) throws DBWebException {
+    public boolean revokeUserTeam(@NotNull WebSession webSession, @NotNull String user, @NotNull String team) throws DBWebException {
         WebUser grantor = webSession.getUser();
         if (grantor == null) {
             throw new DBWebException("Cannot revoke team in anonymous mode");
         }
-        if (!ServletAppUtils.getServletApplication().isDistributed() &&
-            CommonUtils.equalObjects(user, webSession.getUser().getUserId())
-        ) {
-            throw new DBWebException("You cannot edit your own permissions");
+        if (CommonUtils.equalObjects(user, grantor.getUserId())) {
+            checkAdminPermissionsRetained(webSession, user, team);
         }
         try {
             var adminSecurityController = webSession.getAdminSecurityController();
@@ -336,8 +327,9 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         }
     }
 
+    @NotNull
     @Override
-    public List<AdminPermissionInfo> setSubjectPermissions(@NotNull WebSession webSession, String subjectID, List<String> permissions) throws DBWebException {
+    public List<AdminPermissionInfo> setSubjectPermissions(@NotNull WebSession webSession, @NotNull String subjectID, @NotNull List<String> permissions) throws DBWebException {
         validatePermissions(SMConstants.SUBJECT_PERMISSION_SCOPE, permissions);
         WebUser grantor = webSession.getUser();
         if (grantor == null) {
@@ -345,6 +337,11 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         }
         if (CommonUtils.equalObjects(subjectID, CBConstants.DEFAULT_ADMIN_TEAM)) {
             throw new DBWebException("Cannot change permissions for team '" + subjectID + "'");
+        }
+        if (!permissions.contains(DBWConstants.PERMISSION_ADMIN)
+            && isOwnSubject(webSession, grantor.getUserId(), subjectID)
+        ) {
+            checkAdminPermissionsRetained(webSession, grantor.getUserId(), subjectID);
         }
         webSession.addInfoMessage("Set permissions to subject - " + subjectID);
 
@@ -360,8 +357,68 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         }
     }
 
+    /**
+     * Checks that the specified subject is the user himself or one of his teams.
+     */
+    private boolean isOwnSubject(
+        @NotNull WebSession webSession,
+        @NotNull String userId,
+        @NotNull String subjectId
+    ) throws DBWebException {
+        if (subjectId.equals(userId)) {
+            return true;
+        }
+        try {
+            for (SMTeam userTeam : webSession.getAdminSecurityController().getUserTeams(userId)) {
+                if (userTeam.getTeamId().equals(subjectId)) {
+                    return true;
+                }
+            }
+        } catch (DBException e) {
+            throw new DBWebException("Error reading teams of user " + userId, e);
+        }
+        return false;
+    }
+
+    /**
+     * Checks that the user still has administrative permission after revoking permissions from the specified subject.
+     * Prevents the last administrator from locking himself out of the server.
+     */
+    private void checkAdminPermissionsRetained(
+        @NotNull WebSession webSession,
+        @NotNull String userId,
+        @NotNull String revokedSubjectId
+    ) throws DBWebException {
+        if (ServletAppUtils.getServletApplication().isDistributed()) {
+            // permissions are granted by auth roles, not by subjects
+            return;
+        }
+        try {
+            var adminSecurityController = webSession.getAdminSecurityController();
+            if (!adminSecurityController.getSubjectPermissions(revokedSubjectId).contains(DBWConstants.PERMISSION_ADMIN)) {
+                // subject doesn't grant administrative permission, nothing to lose
+                return;
+            }
+            for (SMTeam userTeam : adminSecurityController.getUserTeams(userId)) {
+                String teamId = userTeam.getTeamId();
+                if (!teamId.equals(revokedSubjectId)
+                    && adminSecurityController.getSubjectPermissions(teamId).contains(DBWConstants.PERMISSION_ADMIN)
+                ) {
+                    return;
+                }
+            }
+        } catch (DBException e) {
+            throw new DBWebException("Error reading permissions of user " + userId, e);
+        }
+        throw new DBWebException("You cannot revoke your own administrative permissions");
+    }
+
     @Override
-    public boolean setUserCredentials(@NotNull WebSession webSession, @NotNull String userID, @NotNull String providerId, @NotNull Map<String, Object> credentials) throws DBWebException {
+    public boolean setUserCredentials(@NotNull WebSession webSession,
+                                      @NotNull String userID,
+                                      @NotNull String providerId,
+                                      @WebParameterSecure @NotNull Map<String, Object> credentials
+    ) throws DBWebException {
         WebAuthProviderDescriptor authProvider = WebAuthProviderRegistry.getInstance().getAuthProvider(providerId);
         if (authProvider == null) {
             throw new DBWebException("Invalid auth provider '" + providerId + "'");
@@ -414,7 +471,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public Boolean setUserAuthRole(WebSession webSession, String userId, String authRole) throws DBWebException {
+    public Boolean setUserAuthRole(@NotNull WebSession webSession, @NotNull String userId, @NotNull String authRole) throws DBWebException {
         try {
             log.info(String.format("User set auth role: [grantorUserId=%s]", webSession.getUserId()));
             webSession.getAdminSecurityController().setUserAuthRole(userId, authRole);
@@ -454,7 +511,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
 
     @Override
     public List<DBWFeatureSet> listFeatureSets(@NotNull WebSession webSession) throws DBWebException {
-        return WebFeatureRegistry.getInstance().getWebFeatures();
+        return ServletAppUtils.getServletApplication().getFeatureRegistry().getWebFeatures();
     }
 
     ////////////////////////////////////////////////////////////////////
@@ -493,8 +550,8 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         @NotNull HttpServletRequest request,
         @NotNull WebSession webSession,
         @Nullable String providerId
-    ) throws DBWebException {
-        String origin = ServletAppUtils.getOriginFromRequestOrThrow(request);
+    ) {
+        String origin = ServletAppUtils.getOriginFromRequest(request);
         List<WebAuthProviderConfiguration> result = new ArrayList<>();
         for (SMAuthProviderCustomConfiguration cfg : CBApplication.getInstance().getAppConfiguration().getAuthCustomConfigurations()) {
             if (providerId != null && !providerId.equals(cfg.getProvider())) {
@@ -502,7 +559,11 @@ public class WebServiceAdmin implements DBWServiceAdmin {
             }
             WebAuthProviderDescriptor authProvider = WebAuthProviderRegistry.getInstance().getAuthProvider(cfg.getProvider());
             if (authProvider != null) {
-                result.add(new WebAuthProviderConfiguration(authProvider, cfg, origin));
+                result.add(new WebAuthProviderConfiguration(
+                    authProvider,
+                    maskSecuredConfigParameters(authProvider.getConfigurationParameters(), cfg),
+                    origin
+                ));
             }
         }
         return result;
@@ -518,7 +579,8 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         boolean disabled,
         @Nullable String iconURL,
         @Nullable String description,
-        @Nullable Map<String, Object> parameters) throws DBWebException {
+        @Nullable Map<String, Object> parameters
+    ) throws DBWebException {
         WebAuthProviderDescriptor authProvider = WebAuthProviderRegistry.getInstance().getAuthProvider(providerId);
         if (authProvider == null) {
             throw new DBWebException("Auth provider '" + providerId + "' not found");
@@ -531,6 +593,14 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         providerConfig.setDisabled(disabled);
         providerConfig.setIconURL(iconURL);
         providerConfig.setDescription(description);
+        SMAuthProviderCustomConfiguration savedConfig = getProviderConfig(id);
+        if (parameters != null && savedConfig != null) {
+            for (Map.Entry<String, Object> entry : parameters.entrySet()) {
+                if (CBConstants.SECURED_VALUE.equals(entry.getValue())) {
+                    parameters.put(entry.getKey(), savedConfig.getParameter(entry.getKey()));
+                }
+            }
+        }
         providerConfig.setParameters(parameters);
         CBApplication.getInstance().getAppConfiguration().addAuthProviderConfiguration(providerConfig);
         try {
@@ -544,7 +614,11 @@ public class WebServiceAdmin implements DBWServiceAdmin {
             providerConfig.getProvider(),
             webSession.getUserId()
         ));
-        return new WebAuthProviderConfiguration(authProvider, providerConfig, ServletAppUtils.getOriginFromRequestOrThrow(request));
+        return new WebAuthProviderConfiguration(
+            authProvider,
+            maskSecuredConfigParameters(authProvider.getConfigurationParameters(), providerConfig),
+            ServletAppUtils.getOriginFromRequest(request)
+        );
     }
 
     @Override
@@ -568,70 +642,33 @@ public class WebServiceAdmin implements DBWServiceAdmin {
 
 
     @Override
-    public boolean configureServer(WebSession webSession, Map<String, Object> params) throws DBWebException {
+    public boolean configureServer(@NotNull WebSession webSession, @NotNull Map<String, Object> params) throws DBWebException {
         try {
-            CBAppConfig appConfig = new CBAppConfig(CBApplication.getInstance().getAppConfiguration());
-            CBServerConfig serverConfig = new CBServerConfig();
-            serverConfig.setServerName(CBApplication.getInstance().getServerName());
-            serverConfig.setServerURL(CBApplication.getInstance().getServerURL());
-            serverConfig.setMaxSessionIdleTime(CBApplication.getInstance().getMaxSessionIdleTime());
-            String adminName = null;
-            String adminPassword = null;
 
-            if (!params.isEmpty()) {    // FE can send an empty configuration
-                var config = new AdminServerConfig(params);
-                appConfig.setAnonymousAccessEnabled(config.isAnonymousAccessEnabled());
-                appConfig.setSupportsCustomConnections(config.isCustomConnectionsEnabled());
-                appConfig.setPublicCredentialsSaveEnabled(config.isPublicCredentialsSaveEnabled());
-                appConfig.setAdminCredentialsSaveEnabled(config.isAdminCredentialsSaveEnabled());
-                appConfig.setEnabledFeatures(config.getEnabledFeatures().toArray(new String[0]));
-                // custom logic for enabling embedded drivers
-                updateDisabledDriversConfig(appConfig, config.getDisabledDrivers());
-                appConfig.setResourceManagerEnabled(config.isResourceManagerEnabled());
-                appConfig.setSecretManagerEnabled(config.isSecretManagerEnabled());
-
-                if (CommonUtils.isEmpty(config.getEnabledAuthProviders())) {
-                    // All of them
-                    appConfig.setEnabledAuthProviders(new String[0]);
-                } else {
-                    appConfig.setEnabledAuthProviders(config.getEnabledAuthProviders().toArray(new String[0]));
-                }
-
-                appConfig.setDefaultNavigatorSettings(
-                    CBApplication.getInstance().getAppConfiguration().getDefaultNavigatorSettings());
-
-                adminName = config.getAdminName();
-                adminPassword = config.getAdminPassword();
-                serverConfig.setServerName(config.getServerName());
-                serverConfig.setServerURL(config.getServerURL());
-                serverConfig.setMaxSessionIdleTime(config.getSessionExpireTime());
-                if (config.getForceHttps() != null) {
-                    serverConfig.setForceHttps(config.getForceHttps());
-                }
-                if (config.getSupportedHosts() != null) {
-                    serverConfig.setSupportedHosts(config.getSupportedHosts());
-                }
-            }
-
+            CBServerConfigurationMapper<?, ?> mapper = CBApplication.getInstance()
+                .getServerConfigurationController().createServerConfigurationInputMapper();
+            CBServerConfigurations configurations = mapper.loadServerConfigurationsFromParams(params);
+            String adminName = configurations.adminName();
+            String adminPassword = configurations.adminPassword();
             if (CommonUtils.isEmpty(adminName)) {
                 // Grant admin permissions to the current user
                 WebUser curUser = webSession.getUser();
                 adminName = curUser == null ? null : curUser.getUserId();
                 adminPassword = null;
             }
-            List<AuthInfo> authInfos = new ArrayList<>();
+            List<SMAuthConfiguration> authInfos = new ArrayList<>();
             List<WebAuthInfo> authInfoList = webSession.getAllAuthInfo();
             if (CommonUtils.isEmpty(adminName)) {
                 // Try to get admin name from existing authentications (first one)
                 if (!authInfoList.isEmpty()) {
-                    adminName = authInfoList.get(0).getUserId();
+                    adminName = authInfoList.getFirst().getUserId();
                 }
             }
             if (CommonUtils.isEmpty(adminName)) {
                 adminName = CBConstants.DEFAULT_ADMIN_NAME;
             }
             for (WebAuthInfo webAuthInfo : authInfoList) {
-                authInfos.add(new AuthInfo(
+                authInfos.add(new SMAuthConfiguration(
                     webAuthInfo.getAuthProviderDescriptor().getId(),
                     webAuthInfo.getUserCredentials()));
             }
@@ -639,7 +676,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
             // Patch configuration by services
             for (DBWServiceServerConfigurator wsc : WebServiceRegistry.getInstance().getWebServices(DBWServiceServerConfigurator.class)) {
                 try {
-                    wsc.configureServer(CBApplication.getInstance(), webSession, serverConfig, appConfig);
+                    wsc.configureServer(CBApplication.getInstance(), webSession, configurations.serverConfig(), configurations.appConfig());
                 } catch (Exception e) {
                     log.warn("Error configuring server by web service " + wsc.getClass().getName(), e);
                 }
@@ -651,8 +688,8 @@ public class WebServiceAdmin implements DBWServiceAdmin {
                 adminName,
                 adminPassword,
                 authInfos,
-                serverConfig,
-                appConfig,
+                configurations.serverConfig(),
+                configurations.appConfig(),
                 webSession
             );
 
@@ -662,8 +699,9 @@ public class WebServiceAdmin implements DBWServiceAdmin {
                 webSession.resetUserState();
             } else {
                 // Just reload session state
-                webSession.refreshUserData();
+                webSession.refreshUserPermissions();
             }
+
             WebAppUtils.getWebApplication().getDriverRegistry().refreshApplicableDrivers();
         } catch (Throwable e) {
             throw new DBWebException("Error configuring server", e);
@@ -671,38 +709,8 @@ public class WebServiceAdmin implements DBWServiceAdmin {
         return true;
     }
 
-    // we disable embedded drivers by default and enable it in enabled drivers list
-    // that's why we need so complicated logic for disabling drivers
-    private void updateDisabledDriversConfig(CBAppConfig appConfig, String[] disabledDriversConfig) {
-        Set<String> disabledIds = new LinkedHashSet<>(Arrays.asList(disabledDriversConfig));
-        Set<String> enabledIds = new LinkedHashSet<>(Arrays.asList(appConfig.getEnabledDrivers()));
-
-        // remove all disabled embedded drivers from enabled drivers list
-        enabledIds.removeAll(disabledIds);
-
-        // enable embedded driver if it is not in disabled drivers list
-        for (String driverId : appConfig.getDisabledDrivers()) {
-            if (disabledIds.contains(driverId)) {
-                // driver is also disabled
-                continue;
-            }
-            // driver is removed from disabled list
-            // we need to enable if it is embedded
-            try {
-                DBPDriver driver = WebServiceUtils.getDriverById(driverId);
-                if (driver.isEmbedded()) {
-                    enabledIds.add(driverId);
-                }
-            } catch (DBWebException e) {
-                log.error("Failed to find driver by id", e);
-            }
-        }
-        appConfig.setDisabledDrivers(disabledDriversConfig);
-        appConfig.setEnabledDrivers(enabledIds.toArray(String[]::new));
-    }
-
     @Override
-    public boolean setDefaultNavigatorSettings(WebSession webSession, DBNBrowseSettings settings) throws DBWebException {
+    public boolean setDefaultNavigatorSettings(@NotNull WebSession webSession, @NotNull DBNBrowseSettings settings) throws DBWebException {
         CBApplication.getInstance().getAppConfiguration().setDefaultNavigatorSettings(settings);
         if (CBApplication.getInstance().isConfigurationMode()) {
             return true;
@@ -717,7 +725,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
 
 
     @Override
-    public boolean updateProductConfiguration(WebSession webSession, Map<String, Object> productConfiguration) throws DBWebException {
+    public boolean updateProductConfiguration(@NotNull WebSession webSession, @NotNull Map<String, Object> productConfiguration) throws DBWebException {
         try {
             CBApplication.getInstance().saveProductConfiguration(webSession, productConfiguration);
             return true;
@@ -733,7 +741,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     public SMDataSourceGrant[] getConnectionSubjectAccess(
         @NotNull WebSession webSession,
         @Nullable String projectId,
-        String connectionId
+        @NotNull String connectionId
     ) throws DBWebException {
         DBPProject globalProject = webSession.getProjectById(projectId);
         if (!WebServiceUtils.isGlobalProject(globalProject)) {
@@ -890,17 +898,17 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public WebPropertyInfo saveUserMetaParameter(WebSession webSession, String id, String displayName, String description, Boolean required) throws DBWebException {
+    public WebPropertyInfo saveUserMetaParameter(@NotNull WebSession webSession, @NotNull String id, @NotNull String displayName, String description, Boolean required) throws DBWebException {
         throw new DBWebException("Not implemented");
     }
 
     @Override
-    public Boolean deleteUserMetaParameter(WebSession webSession, String id) throws DBWebException {
+    public Boolean deleteUserMetaParameter(@NotNull WebSession webSession, @NotNull String id) throws DBWebException {
         throw new DBWebException("Not implemented");
     }
 
     @Override
-    public Boolean setUserMetaParameterValues(WebSession webSession, String userId, Map<String, String> parameters) throws DBWebException {
+    public Boolean setUserMetaParameterValues(@NotNull WebSession webSession, @NotNull String userId, @NotNull Map<String, String> parameters) throws DBWebException {
         try {
             webSession.getAdminSecurityController().setSubjectMetas(userId, parameters);
             return true;
@@ -910,7 +918,7 @@ public class WebServiceAdmin implements DBWServiceAdmin {
     }
 
     @Override
-    public Boolean setTeamMetaParameterValues(WebSession webSession, String teamId, Map<String, String> parameters) throws DBWebException {
+    public Boolean setTeamMetaParameterValues(@NotNull WebSession webSession, @NotNull String teamId, @NotNull Map<String, String> parameters) throws DBWebException {
         try {
             webSession.getAdminSecurityController().setSubjectMetas(teamId, parameters);
             return true;
@@ -940,5 +948,34 @@ public class WebServiceAdmin implements DBWServiceAdmin {
                 ));
             }
         }
+    }
+
+    @NotNull
+    private SMAuthProviderCustomConfiguration maskSecuredConfigParameters(
+        @NotNull List<WebAuthProviderProperty> configProperties,
+        @NotNull SMAuthProviderCustomConfiguration config
+    ) {
+        SMAuthProviderCustomConfiguration securedConfig = new SMAuthProviderCustomConfiguration(config);
+        for (WebAuthProviderProperty property : configProperties) {
+            String[] features = property.getFeatures();
+            if (features != null && ArrayUtils.contains(features, DBConstants.PROP_FEATURE_PASSWORD)) {
+                String propertyId = property.getId();
+                Object securedParameterValue = config.getParameter(propertyId);
+                if (securedParameterValue != null && !securedParameterValue.toString().isEmpty()) {
+                    securedConfig.getParameters().put(propertyId, CBConstants.SECURED_VALUE);
+                }
+            }
+        }
+        return securedConfig;
+    }
+
+    @Nullable
+    private SMAuthProviderCustomConfiguration getProviderConfig(@NotNull String configId) {
+        return CBApplication.getInstance().getAppConfiguration().getAuthCustomConfigurations().stream()
+            .filter(cfg -> Objects.equals(cfg.getId(), configId))
+            .filter(cfg ->
+                WebAuthProviderRegistry.getInstance().getAuthProvider(cfg.getProvider()) != null
+            ).findFirst()
+            .orElse(null);
     }
 }

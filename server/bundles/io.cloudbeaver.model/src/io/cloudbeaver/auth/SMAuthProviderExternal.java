@@ -70,8 +70,19 @@ public interface SMAuthProviderExternal<AUTH_SESSION extends SMSession> extends 
         boolean selfIdentity) throws DBException;
 
     /**
+     * Whether a user that is not found should be provisioned (auto-created) on external login.
+     */
+    default boolean isAutoUserProvisioningEnabled(@Nullable SMAuthProviderCustomConfiguration providerConfig) {
+        return true;
+    }
+
+    /**
      * Make some post authentication actions
      */
     default void postAuthentication() {}
 
+    @Override
+    default boolean supportsOpeningSessionAsChild() {
+        return true;
+    }
 }

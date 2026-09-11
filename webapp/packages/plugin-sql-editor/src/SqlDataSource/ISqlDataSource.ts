@@ -13,6 +13,7 @@ import type { IDatabaseDataModel } from '@cloudbeaver/plugin-data-viewer';
 import type { QueryDataSource } from '../QueryDataSource.js';
 import type { ESqlDataSourceFeatures } from './ESqlDataSourceFeatures.js';
 import type { ISqlDataSourceHistory } from './SqlDataSourceHistory/ISqlDataSourceHistory.js';
+import type { TLocalizationToken } from '@cloudbeaver/core-localization';
 
 export interface ISqlDataSourceKey {
   readonly key: string;
@@ -29,11 +30,12 @@ export interface ISqlEditorCursor {
   readonly head: number;
 }
 
-export interface ISqlDataSource extends ILoadableState {
+export interface ISqlDataSource<TDataSource extends QueryDataSource = QueryDataSource> extends ILoadableState {
   readonly name: string | null;
   readonly icon?: string;
   readonly emptyPlaceholder?: string;
-  readonly message?: string;
+  readonly message?: TLocalizationToken;
+  readonly loadingMessage?: TLocalizationToken;
 
   readonly sourceKey: string;
   readonly projectId: string | null;
@@ -43,7 +45,7 @@ export interface ISqlDataSource extends ILoadableState {
   readonly incomingScript?: string;
   readonly history: ISqlDataSourceHistory;
 
-  readonly databaseModels: IDatabaseDataModel<QueryDataSource>[];
+  readonly databaseModels: IDatabaseDataModel<TDataSource>[];
   readonly executionContext?: IConnectionExecutionContextInfo;
 
   readonly isAutoSaveEnabled: boolean;
@@ -54,7 +56,7 @@ export interface ISqlDataSource extends ILoadableState {
 
   readonly onUpdate: ISyncExecutor;
   readonly onSetScript: ISyncExecutor<ISetScriptData>;
-  readonly onDatabaseModelUpdate: ISyncExecutor<IDatabaseDataModel<QueryDataSource>[]>;
+  readonly onDatabaseModelUpdate: ISyncExecutor<IDatabaseDataModel<TDataSource>[]>;
 
   isOpened(): boolean;
   isReadonly(): boolean;

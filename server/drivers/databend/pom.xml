@@ -9,6 +9,7 @@
         <version>1.0.0</version>
         <relativePath>../</relativePath>
     </parent>
+    <packaging>pom</packaging>
 
     <properties>
         <deps.output.dir>databend</deps.output.dir>
@@ -18,7 +19,7 @@
         <dependency>
             <groupId>com.databend</groupId>
             <artifactId>databend-jdbc</artifactId>
-            <version>0.3.9</version>
+            <version>0.4.8</version>
         </dependency>
     </dependencies>
 

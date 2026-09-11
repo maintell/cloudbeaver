@@ -34,14 +34,23 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    cursor: pointer;
+    color: var(--theme-link-color);
+    outline: none;
+
+    &:hover,
+    &:focus {
+      color: var(--theme-link-color-focus);
+      text-decoration: underline;
+    }
   }
 
   & .menuBox {
     position: relative;
     display: flex;
     flex-shrink: 0;
-    width: 16px;
-    height: 16px;
+    width: 24px;
+    height: 24px;
 
     & .menuIcon {
       width: 16px;
@@ -49,4 +58,12 @@
       flex-shrink: 0;
     }
   }
+}
+
+.contextMenu {
+  width: 16px;
+  height: 16px;
+  padding: 4px;
+  box-sizing: content-box;
+  cursor: pointer;
 }

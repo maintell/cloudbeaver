@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,21 @@ import { isAutoLoginSessionAction } from './isAutoLoginSessionAction.js';
 
 export type AuthEventType = 'before' | 'after';
 
-@injectable()
+@injectable(() => [
+  ScreenService,
+  AppAuthService,
+  AuthDialogService,
+  UserInfoResource,
+  NotificationService,
+  AdministrationScreenService,
+  AuthProviderService,
+  AuthProvidersResource,
+  SessionDataResource,
+  ServerConfigResource,
+  WindowsService,
+  SessionActionService,
+  NavigationService,
+])
 export class AuthenticationService extends Bootstrap {
   readonly onLogout: Executor<AuthEventType>;
   readonly onLogin: Executor<AuthEventType>;
@@ -42,7 +56,7 @@ export class AuthenticationService extends Bootstrap {
   configureAuthProvider: (() => void) | null;
   configureIdentityProvider: (() => void) | null;
 
-  private authPromise: Promise<DialogueStateResult | null> | null;
+  private authPromise: Promise<DialogueStateResult> | null;
 
   constructor(
     private readonly screenService: ScreenService,
@@ -111,11 +125,17 @@ export class AuthenticationService extends Bootstrap {
     const redirectLinks = userLogoutInfo.redirectLinks;
 
     if (redirectLinks.length) {
-      const url = redirectLinks[0];
+      const redirectLink = redirectLinks[0]!;
+
+      if (redirectLink.sameTabRedirect) {
+        window.location.replace(redirectLink.url);
+        return;
+      }
+
       const id = `okta-logout-id-${uuid()}`;
 
       const popup = this.windowsService.open(id, {
-        url,
+        url: redirectLink.url,
         target: id,
         width: 600,
         height: 700,
@@ -166,12 +186,12 @@ export class AuthenticationService extends Bootstrap {
 
     this.authPromise = this.authDialogService
       .showLoginForm(persistent, options)
-      .then(async state => {
-        if (state === DialogueStateResult.Rejected) {
-          return state;
+      .then(async ({ status }) => {
+        if (status === DialogueStateResult.Rejected) {
+          return status;
         }
         await this.onLogin.execute('after');
-        return state;
+        return status;
       })
       .finally(() => {
         this.authPromise = null;

@@ -8,15 +8,15 @@
 import { expect, test } from 'vitest';
 
 import { App } from '../../App.js';
-import { manifest } from './manifest.js';
 import { TestBootstrap } from './TestBootstrap.js';
 import { TestService } from './TestService.js';
+import testModule from './module.js';
 
 test('App Initialization', async () => {
-  const app = new App([manifest]);
+  const app = new App([testModule]);
 
   await (app as any).registerServices();
-  const serviceProvider = app.getServiceProvider();
+  const serviceProvider = app.getServiceProvider()!;
 
   const service = serviceProvider.getService(TestService);
   const bootstrap = serviceProvider.getService(TestBootstrap);

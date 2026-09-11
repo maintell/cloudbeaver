@@ -22,7 +22,15 @@ const SearchDatabase = importLazyComponent(() => import('./SearchDatabase.js').t
 
 const formGetter = () => SearchDatabase;
 
-@injectable()
+@injectable(() => [
+  NotificationService,
+  ConnectionInfoResource,
+  IServiceProvider,
+  OptionsPanelService,
+  ConnectionFormService,
+  CommonDialogService,
+  ConnectionsManagerService,
+])
 export class ConnectionSearchService {
   hosts = 'localhost';
   databases: AdminConnectionSearchInfo[];
@@ -125,13 +133,14 @@ export class ConnectionSearchService {
       return true;
     }
 
-    const result = await this.commonDialogService.open(ConfirmationDialog, {
-      title: 'plugin_connections_connection_edit_cancel_title',
-      message: 'plugin_connections_connection_edit_cancel_message',
-      confirmActionText: 'ui_processing_ok',
+    const { status } = await this.commonDialogService.open(ConfirmationDialog, {
+      title: 'ui_discard_changes',
+      message: 'ui_discard_changes_message',
+      confirmActionText: 'ui_discard',
+      cancelActionText: 'ui_keep_editing',
     });
 
-    return result !== DialogueStateResult.Rejected;
+    return status !== DialogueStateResult.Rejected;
   }
 
   change(hosts: string): void {

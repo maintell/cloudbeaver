@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -46,7 +47,14 @@ public class ServletAppUtils {
     private static final String HEADER_REFERER = "Referer";
 
     private static final String HEADER_FORWARDED_SCHEME = "X-Forwarded-Scheme";
+    private static final String HEADER_FORWARDED_PROTO = "X-Forwarded-Proto";
+    private static final String HEADER_FORWARDED_PORT = "X-Forwarded-Port";
     private static final String HEADER_FORWARDED_HOST = "X-Forwarded-Host";
+    private static final Set<Integer> DEFAULT_PORTS = Set.of(
+        80,
+        443
+    );
+
 
     private static final Log log = Log.getLog(ServletAppUtils.class);
 
@@ -184,9 +192,16 @@ public class ServletAppUtils {
         @NotNull String serviceId,
         @NotNull String origin
     ) throws DBException {
-        String finalOrigin =  webAuthApplication.modifyOrigin(origin);
-        StringBuilder authUriBuilder = new StringBuilder(removeSideSlashes(finalOrigin));
+        String finalOrigin = ServletAppUtils.substringBeforeRootURI(webAuthApplication.modifyOrigin(origin));
         String serviceUriSegment = removeSideSlashes(webAuthApplication.getAuthServiceUriSegment());
+        String rootUri = removeSideSlashes(getServletApplication().getRootURI());
+        if (finalOrigin.endsWith("/" + rootUri) && serviceUriSegment.startsWith(rootUri + "/")) {
+            finalOrigin = finalOrigin.substring(0, finalOrigin.length() - rootUri.length());
+        }
+        StringBuilder authUriBuilder = new StringBuilder(removeSideSlashes(finalOrigin));
+        if (CommonUtils.isNotEmpty(rootUri)) {
+            authUriBuilder.append("/").append(rootUri);
+        }
         if (CommonUtils.isNotEmpty(serviceUriSegment)) {
             authUriBuilder.append("/").append(serviceUriSegment);
         }
@@ -218,6 +233,14 @@ public class ServletAppUtils {
         sessionCookie.setHttpOnly(true);
         sessionCookie.setPath(path);
         response.addCookie(sessionCookie);
+    }
+
+    public static String getHeaderOrLegacy(HttpServletRequest request, String headerName, String legacyHeaderName) {
+        String value = request.getHeader(headerName);
+        if (CommonUtils.isEmpty(value)) {
+            value = request.getHeader(legacyHeaderName);
+        }
+        return value;
     }
 
     public static String getRequestCookie(HttpServletRequest request, String cookieName) {
@@ -286,21 +309,41 @@ public class ServletAppUtils {
     }
 
     @NotNull
-    public static String getOriginFromRequestOrThrow(HttpServletRequest request) throws DBWebException {
+    public static String getHostOriginFromRequest(@NotNull HttpServletRequest request) {
+        return substringBeforeRootURI(getOriginFromRequest(request));
+    }
+
+    @NotNull
+    public static String getOriginFromRequest(@NotNull HttpServletRequest request) {
         String origin = request.getHeader(HEADER_ORIGIN);
+        if (log.isTraceEnabled()) {
+            log.trace("Origin header: " + origin);
+        }
+        if ("null".equals(origin)) {
+            //strange identity provider bug
+            origin = null;
+        }
         if (CommonUtils.isEmpty(origin)) {
             origin = request.getHeader(HEADER_X_ORIGIN);
-        }
-        if (CommonUtils.isEmpty(origin)) {
-            origin = request.getHeader(HEADER_REFERER);
+            if (log.isTraceEnabled()) {
+                log.trace("X-Origin header: " + origin);
+            }
         }
         String forwardedScheme = request.getHeader(HEADER_FORWARDED_SCHEME);
+        if (CommonUtils.isEmpty(forwardedScheme)) {
+            forwardedScheme = request.getHeader(HEADER_FORWARDED_PROTO);
+        }
         String forwardedHost = request.getHeader(HEADER_FORWARDED_HOST);
         if (CommonUtils.isNotEmpty(forwardedScheme) && CommonUtils.isNotEmpty(forwardedHost)) {
             origin = forwardedScheme + "://" + forwardedHost;
-        }
-        if (CommonUtils.isEmpty(origin)) {
+            if (log.isTraceEnabled()) {
+                log.trace("forwarded origin: " + origin);
+            }
+        } else if (CommonUtils.isEmpty(origin)) {
             URI requestUrl = URI.create(request.getRequestURL().toString());
+            if (log.isTraceEnabled()) {
+                log.trace("Request URL: " + requestUrl);
+            }
             origin = getRootUrlFromUri(requestUrl) + "/";
         }
         origin = removeSideSlashes(origin);
@@ -309,7 +352,55 @@ public class ServletAppUtils {
         if (!origin.endsWith(rootUri)) {
             origin = origin + "/" + rootUri + "/";
         }
-        return removeSideSlashes(origin);
+
+        origin = removeSideSlashes(origin);
+        URI uri = URI.create(origin);
+        int port = uri.getPort();
+        if (CommonUtils.isNotEmpty(request.getHeader(HEADER_FORWARDED_PORT))) {
+            try {
+                port = Integer.parseInt(request.getHeader(HEADER_FORWARDED_PORT));
+            } catch (NumberFormatException e) {
+                log.error("Failed to parse port from header: " + request.getHeader(HEADER_FORWARDED_PORT), e);
+            }
+        }
+
+        String finalScheme = uri.getScheme();
+        String finalHost = uri.getHost();
+        int finalPort = port;
+        boolean changed = false;
+        if (CommonUtils.isNotEmpty(forwardedScheme) && !forwardedScheme.equals(finalScheme)) {
+            finalScheme = forwardedScheme;
+            changed = true;
+        }
+        if (CommonUtils.isNotEmpty(forwardedHost) && !forwardedHost.equals(finalHost)) {
+            finalHost = forwardedHost;
+            changed = true;
+        }
+        if (DEFAULT_PORTS.contains(port)) {
+            finalPort = -1;
+            changed = true;
+        }
+        if (log.isTraceEnabled()) {
+            log.trace("Origin URI: " + origin);
+        }
+
+        if (changed) {
+            try {
+                origin = new URI(
+                    finalScheme,
+                    uri.getUserInfo(),
+                    finalHost,
+                    finalPort,
+                    uri.getPath(),
+                    uri.getQuery(),
+                    uri.getFragment()
+                ).toString();
+            } catch (URISyntaxException e) {
+                log.error("Failed to create URI without port", e);
+            }
+        }
+
+        return origin;
     }
 
     public static String getRootUrlFromUri(@NotNull URI uri) {
@@ -328,7 +419,22 @@ public class ServletAppUtils {
         if (CommonUtils.isEmpty(rootUri)) {
             return uri;
         }
-        String[] split = uri.split(rootUri);
-        return split[0];
+        rootUri = "/" + rootUri;
+        if (!uri.endsWith(rootUri)) {
+            rootUri = rootUri + "/";
+        }
+        return substringBeforeLast(uri, rootUri);
+    }
+
+    public static String substringBeforeLast(
+        @NotNull String string,
+        @NotNull String separator
+    ) {
+        if (CommonUtils.isNotEmpty(string) && CommonUtils.isNotEmpty(separator)) {
+            int pos = string.lastIndexOf(separator);
+            return pos == -1 ? string : string.substring(0, pos);
+        } else {
+            return string;
+        }
     }
 }

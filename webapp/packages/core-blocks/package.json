@@ -2,15 +2,18 @@
   "name": "@cloudbeaver/core-blocks",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js",
+    "./*.css": "./src/*.css"
   },
   "scripts": {
     "build": "tsc -b",
@@ -31,8 +34,8 @@
     "@cloudbeaver/core-sdk": "workspace:*",
     "@cloudbeaver/core-theming": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
-    "@dbeaver/js-helpers": "workspace:^",
-    "@dbeaver/ui-kit": "workspace:^",
+    "@dbeaver/js-helpers": "workspace:*",
+    "@dbeaver/ui-kit": "workspace:*",
     "go-split": "^3",
     "minisearch": "^7",
     "mobx": "^6",
@@ -41,27 +44,29 @@
     "react-dom": "^19",
     "react-hotkeys-hook": "^5",
     "react-minisearch": "^7",
-    "reakit": "^1",
-    "reakit-utils": "^0",
     "subscript": "^9",
     "tslib": "^2"
   },
   "devDependencies": {
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/core-di": "workspace:*",
+    "@cloudbeaver/core-events": "workspace:*",
     "@cloudbeaver/core-executor": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
     "@cloudbeaver/tests-runner": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
+    "@dbeaver/react-tests": "workspace:*",
     "@testing-library/jest-dom": "^6",
     "@testing-library/react": "^16",
+    "@testing-library/user-event": "^14",
     "@types/react": "^19",
     "mobx": "^6",
     "react": "^19",
     "react-dom": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }

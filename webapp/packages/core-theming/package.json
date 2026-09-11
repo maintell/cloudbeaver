@@ -2,8 +2,9 @@
   "name": "@cloudbeaver/core-theming",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
@@ -11,6 +12,7 @@
   "license": "Apache-2.0",
   "exports": {
     ".": "./lib/index.js",
+    "./module": "./lib/module.js",
     "./*": "./*"
   },
   "scripts": {
@@ -35,18 +37,11 @@
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
+    "@dbeaver/react-tests": "workspace:*",
     "@fontsource/roboto": "^5",
-    "@material/button": "^4",
-    "@material/checkbox": "^4",
-    "@material/elevation": "^4",
-    "@material/layout-grid": "^4",
-    "@material/radio": "^4",
-    "@material/ripple": "^4",
-    "@material/switch": "^4",
-    "@material/theme": "^4",
-    "@material/typography": "^4",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }

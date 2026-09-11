@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,11 @@ import type { IExecutionContextProvider, ISyncContextLoader } from '@cloudbeaver
 import {
   type INavNodeRenameData,
   type INodeNavigationData,
+  isConnectionFolder,
+  NavNodeInfoResource,
   NavNodeManagerService,
   NavTreeResource,
+  NODE_PATH_PREFIX,
   NodeManagerUtils,
   objectNavNodeProvider,
 } from '@cloudbeaver/core-navigation-tree';
@@ -45,7 +48,17 @@ import { objectViewerTabHandlerKey } from './objectViewerTabHandlerKey.js';
 const ObjectViewerPanel = importLazyComponent(() => import('./ObjectViewerPanel/ObjectViewerPanel.js').then(m => m.ObjectViewerPanel));
 const ObjectViewerTab = importLazyComponent(() => import('./ObjectViewerTab.js').then(m => m.ObjectViewerTab));
 
-@injectable()
+@injectable(() => [
+  NavNodeManagerService,
+  DBObjectPageService,
+  NotificationService,
+  NavigationTabsService,
+  ConnectionInfoResource,
+  ConnectionNavNodeService,
+  NavTreeResource,
+  ConnectionExecutionContextResource,
+  NavNodeInfoResource,
+])
 export class ObjectViewerTabService {
   readonly tabHandler: TabHandler<IObjectViewerTabState>;
 
@@ -58,6 +71,7 @@ export class ObjectViewerTabService {
     private readonly connectionNavNodeService: ConnectionNavNodeService,
     private readonly navTreeResource: NavTreeResource,
     private readonly connectionExecutionContextResource: ConnectionExecutionContextResource,
+    private readonly navNodeInfoResource: NavNodeInfoResource,
   ) {
     this.tabHandler = this.navigationTabsService.registerTabHandler<IObjectViewerTabState>({
       key: objectViewerTabHandlerKey,
@@ -67,6 +81,7 @@ export class ObjectViewerTabService {
       onSelect: this.selectObjectTab.bind(this),
       onClose: this.closeObjectTab.bind(this),
       canClose: this.canCloseObjectTab.bind(this),
+      onUnload: this.unloadObjectTab.bind(this),
 
       extensions: [
         projectProvider(this.getProject.bind(this)),
@@ -104,6 +119,11 @@ export class ObjectViewerTabService {
     });
   }
 
+  private async unloadObjectTab(tab: ITab<IObjectViewerTabState>) {
+    // TODO: we need to call unloadPages, but it's not implemented in the DBObjectPageService
+    await this.dbObjectPageService.closePages(tab);
+  }
+
   isPageActive(tab: ITab<IObjectViewerTabState>, page: ObjectPage): boolean {
     return tab.handlerState.pageId === page.key;
   }
@@ -123,9 +143,10 @@ export class ObjectViewerTabService {
       tabInfo.registerTab(tab);
     }
 
-    function isSupported(): boolean {
-      return NodeManagerUtils.isDatabaseObject(data.nodeId);
-    }
+    const isSupported = (): boolean => {
+      const node = this.navNodeInfoResource.get(data.nodeId);
+      return NodeManagerUtils.isDatabaseObject(data.nodeId) && !isConnectionFolder(node);
+    };
 
     if (isSupported()) {
       nodeInfo.markOpen();
@@ -364,6 +385,10 @@ export class ObjectViewerTabService {
         if (!this.connectionInfoResource.has(tab.handlerState.connectionKey)) {
           return false;
         }
+      }
+
+      if (!tab.handlerState.objectId.startsWith(NODE_PATH_PREFIX)) {
+        return false;
       }
 
       runInAction(() => {

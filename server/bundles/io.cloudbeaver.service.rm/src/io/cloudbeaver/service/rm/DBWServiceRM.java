@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ public interface DBWServiceRM extends DBWService {
         @NotNull @WebObjectId String projectId,
         @NotNull String resourcePath,
         @NotNull String propertyName,
-        @Nullable Object propertyValue) throws DBException;
+        @Nullable String propertyValue) throws DBException;
 
     @WebProjectAction(
         requireProjectPermissions = RMConstants.PERMISSION_PROJECT_RESOURCE_VIEW
@@ -127,6 +127,14 @@ public interface DBWServiceRM extends DBWService {
         @NotNull WebSession session,
         @NotNull String name,
         @Nullable String description) throws DBWebException;
+
+    @WebAction(requirePermissions = {RMConstants.PERMISSION_RM_ADMIN})
+    RMProject updateProject(
+        @NotNull WebSession session,
+        @NotNull String projectId,
+        @Nullable String name,
+        @Nullable String description
+    ) throws DBWebException;
 
     @WebAction(requirePermissions = {RMConstants.PERMISSION_RM_ADMIN})
     boolean deleteProject(
@@ -183,4 +191,5 @@ public interface DBWServiceRM extends DBWService {
         @NotNull WebSession webSession,
         @NotNull String subjectId
     ) throws DBWebException;
+
 }

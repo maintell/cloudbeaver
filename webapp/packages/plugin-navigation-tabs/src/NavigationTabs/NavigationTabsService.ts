@@ -18,6 +18,7 @@ import { StorageService } from '@cloudbeaver/core-storage';
 import { isArraysEqual, MetadataMap, TempMap } from '@cloudbeaver/core-utils';
 import { ACTION_OPEN_IN_TAB, type IActiveView, View } from '@cloudbeaver/core-view';
 import { PlaceholderContainer } from '@cloudbeaver/core-blocks';
+import { reorderArray } from '@dbeaver/js-helpers';
 
 import type { ITab, ITabMetadata } from './ITab.js';
 import { TabHandler, type TabHandlerEvent, type TabHandlerOptions, type TabSyncHandlerEvent } from './TabHandler.js';
@@ -36,7 +37,7 @@ const MULTI_PROJECTS = '@://multi_projects//';
 
 const NAVIGATION_TABS_BASE_KEY = 'navigation_tabs';
 
-@injectable()
+@injectable(() => [NotificationService, StorageService, UserInfoResource, ProjectsService, AdministrationScreenService, AppAuthService])
 export class NavigationTabsService extends View<ITab> {
   get currentTab(): ITab | undefined {
     if (this.currentTabId) {
@@ -54,14 +55,15 @@ export class NavigationTabsService extends View<ITab> {
   }
 
   get tabIdList(): string[] {
-    return Array.from(this.tabsMap.values())
-      .filter(
-        tab =>
-          this.getTabMetadata(tab.id).restored &&
-          tab.userId === this.userInfoResource.getId() &&
-          (tab.projectId === null || this.projectsService.activeProjects.some(project => project.id === tab.projectId)),
-      )
-      .map(tab => tab.id);
+    return this.userTabsState.tabs.filter(tabId => {
+      const tab = this.tabsMap.get(tabId);
+      return (
+        tab &&
+        this.getTabMetadata(tab.id).restored &&
+        tab.userId === this.userInfoResource.getId() &&
+        (tab.projectId === null || this.projectsService.activeProjects.some(project => project.id === tab.projectId))
+      );
+    });
   }
 
   get history(): INavigatorHistory {
@@ -148,6 +150,7 @@ export class NavigationTabsService extends View<ITab> {
       openTab: action,
       selectTab: action,
       closeTab: action,
+      reorderTab: action,
       registerTabHandler: action,
       updateHandlerState: action,
       unloadTabs: action,
@@ -295,6 +298,22 @@ export class NavigationTabsService extends View<ITab> {
     if (ResourceKeyUtils.isIntersect(key, this.history.currentId)) {
       this.selectTab(this.history.history.shift() ?? '', skipHandlers);
     }
+  }
+
+  reorderTab(tabId: string, target: { tabId: string; position: 'before' | 'after' }): void {
+    const tabs = this.userTabsState.tabs;
+    const result = reorderArray(tabs, tabId, { item: target.tabId, position: target.position });
+
+    if (tabs === result) {
+      return;
+    }
+
+    this.userTabsState.tabs = result;
+    this.onStateUpdate.execute();
+  }
+
+  getTabPosition(tabId: string): number {
+    return this.userTabsState.tabs.indexOf(tabId);
   }
 
   registerTabHandler<TState>(options: TabHandlerOptions<TState>): TabHandler<TState> {

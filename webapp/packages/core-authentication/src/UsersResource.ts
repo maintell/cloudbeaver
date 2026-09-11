@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2024 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -30,18 +30,17 @@ import {
   type GetUsersListQueryVariables,
   GraphQLService,
 } from '@cloudbeaver/core-sdk';
+import { Executor } from '@cloudbeaver/core-executor';
 
 import { AUTH_PROVIDER_LOCAL_ID } from './AUTH_PROVIDER_LOCAL_ID.js';
 import { AuthInfoService } from './AuthInfoService.js';
 import { AuthProviderService } from './AuthProviderService.js';
+import { compareUsersById, isNewUser, NEW_USER_SYMBOL, type AdminUserNew } from './compareUser.js';
 import type { IAuthCredentials } from './IAuthCredentials.js';
-
-const NEW_USER_SYMBOL = Symbol('new-user');
 
 export type AdminUser = AdminUserInfoFragment;
 export type AdminUserOrigin = AdminUserInfoFragment['origins'][number];
 
-type AdminUserNew = AdminUser & { [NEW_USER_SYMBOL]: boolean };
 export type UserResourceIncludes = Omit<GetUsersListQueryVariables, 'userId' | 'page' | 'filter'>;
 
 interface IUserResourceFilterOptions {
@@ -63,8 +62,10 @@ interface UserCreateOptions {
   enabled?: boolean;
 }
 
-@injectable()
+@injectable(() => [GraphQLService, ServerConfigResource, AuthProviderService, AuthInfoService, SessionPermissionsResource])
 export class UsersResource extends CachedMapResource<string, AdminUser, UserResourceIncludes> {
+  readonly onUserCreate: Executor<AdminUser>;
+
   constructor(
     private readonly graphQLService: GraphQLService,
     private readonly serverConfigResource: ServerConfigResource,
@@ -73,6 +74,8 @@ export class UsersResource extends CachedMapResource<string, AdminUser, UserReso
     sessionPermissionsResource: SessionPermissionsResource,
   ) {
     super();
+
+    this.onUserCreate = new Executor();
 
     sessionPermissionsResource.require(this, EAdminPermission.admin);
     sessionPermissionsResource.onDataOutdated.addHandler(() => this.markOutdated());
@@ -91,7 +94,7 @@ export class UsersResource extends CachedMapResource<string, AdminUser, UserReso
     this.aliases.add(UsersResourceNewUsers, () => {
       const orderedKeys = this.entries
         .filter(k => isNewUser(k[1]))
-        .sort((a, b) => compareUsers(a[1], b[1]))
+        .sort((a, b) => compareUsersById(a[1], b[1]))
         .map(([key]) => key);
       return resourceKeyList(orderedKeys);
     });
@@ -148,14 +151,23 @@ export class UsersResource extends CachedMapResource<string, AdminUser, UserReso
 
     const newUser = user as unknown as AdminUserNew;
     newUser[NEW_USER_SYMBOL] = true;
+    newUser.createdAt = Date.now();
     this.set(user.userId, newUser);
 
-    return this.get(user.userId)!;
+    const userData = this.get(user.userId)!;
+
+    await this.onUserCreate.execute(userData);
+    return userData;
   }
 
   cleanNewFlags(): void {
     for (const user of this.data.values()) {
-      (user as AdminUserNew)[NEW_USER_SYMBOL] = false;
+      if (!isNewUser(user)) {
+        continue;
+      }
+
+      user[NEW_USER_SYMBOL] = false;
+      user.createdAt = 0;
     }
   }
 
@@ -313,16 +325,4 @@ export class UsersResource extends CachedMapResource<string, AdminUser, UserReso
   protected validateKey(key: string): boolean {
     return typeof key === 'string';
   }
-}
-
-export function isLocalUser(user: AdminUser): boolean {
-  return user.origins.some(origin => origin.type === AUTH_PROVIDER_LOCAL_ID);
-}
-
-export function isNewUser(user: AdminUser): boolean {
-  return NEW_USER_SYMBOL in user && user[NEW_USER_SYMBOL] === true;
-}
-
-export function compareUsers(a: AdminUser, b: AdminUser): number {
-  return a.userId.localeCompare(b.userId);
 }

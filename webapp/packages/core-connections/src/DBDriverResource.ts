@@ -16,6 +16,7 @@ import {
   type DatabaseDriverFragment,
   DriverConfigurationType,
   type DriverListQueryVariables,
+  type DriverPropertyInfoFragment,
   GraphQLService,
 } from '@cloudbeaver/core-sdk';
 import { isArraysEqual } from '@cloudbeaver/core-utils';
@@ -27,7 +28,9 @@ export const NEW_DRIVER_SYMBOL = Symbol('new-driver');
 export type NewDBDriver = DBDriver & { [NEW_DRIVER_SYMBOL]: boolean; timestamp: number };
 export type DBDriverResourceIncludes = Omit<DriverListQueryVariables, 'driverId'>;
 
-@injectable()
+export type DriverPropertyInfo = DriverPropertyInfoFragment;
+
+@injectable(() => [ServerConfigResource, GraphQLService, WorkspaceConfigEventHandler, AppAuthService])
 export class DBDriverResource extends CachedMapResource<string, DBDriver, DBDriverResourceIncludes> {
   get enabledDrivers() {
     return this.values.filter(driver => driver.enabled).sort(this.compare);
@@ -41,6 +44,7 @@ export class DBDriverResource extends CachedMapResource<string, DBDriver, DBDriv
   ) {
     super();
     appAuthService.requireAuthentication(this);
+
     this.sync(
       this.serverConfigResource,
       () => {},

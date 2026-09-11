@@ -34,7 +34,7 @@ public class CBWebServerConfig extends WebServerConfig {
 
     @Property
     public String getServerURL() {
-        return CommonUtils.notEmpty(cbApp.getServerConfiguration().getServerURL());
+        return ""; // backward compatibility
     }
 
     @Property
@@ -98,5 +98,11 @@ public class CBWebServerConfig extends WebServerConfig {
     @Property
     public List<String> getSupportedHosts() {
         return cbApp.getServerConfiguration().getSupportedHosts();
+    }
+
+    @NotNull
+    @Property
+    public String getBindSessionToIp() {
+        return cbApp.getServerConfiguration().getBindSessionToIp();
     }
 }

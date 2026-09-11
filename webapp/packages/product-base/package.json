@@ -3,7 +3,6 @@
   "type": "module",
   "sideEffects": [
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
@@ -11,6 +10,7 @@
   "license": "Apache-2.0",
   "exports": {
     ".": "./lib/index.js",
+    "./module": "./lib/module.js",
     "./*.js": "./lib/*.js",
     "./*": "./*"
   },
@@ -26,14 +26,17 @@
   "devDependencies": {
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
-    "@tailwindcss/vite": "4.0.7",
     "@types/fs-extra": "^11",
     "@types/node": "^22",
+    "@vitejs/plugin-legacy": "^7",
+    "rimraf": "^6",
+    "terser": "^5",
     "tslib": "^2",
     "typescript": "^5"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4",
+    "@tailwindcss/vite": "4.0.7",
+    "@vitejs/plugin-react": "^5",
     "@wroud/vite-plugin-asset-resolver": "^0",
     "@wroud/vite-plugin-tsc": "^0",
     "fs-extra": "^11",

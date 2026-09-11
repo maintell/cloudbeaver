@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,17 @@ const PublicConnectionForm = importLazyComponent(() => import('./PublicConnectio
 
 const formGetter = () => PublicConnectionForm;
 
-@injectable()
+@injectable(() => [
+  CommonDialogService,
+  NotificationService,
+  OptionsPanelService,
+  IServiceProvider,
+  ConnectionFormService,
+  ConnectionInfoResource,
+  ConnectionsManagerService,
+  UserInfoResource,
+  AuthenticationService,
+])
 export class PublicConnectionFormService {
   formState: ConnectionFormState | null;
 
@@ -73,7 +83,8 @@ export class PublicConnectionFormService {
 
   async change(projectId: string, config: ConnectionConfig, availableDrivers?: string[]): Promise<void> {
     this.formState?.dispose();
-    this.formState = new ConnectionFormState(this.serviceProvider, this.connectionFormService, {
+
+    const formState = new ConnectionFormState(this.serviceProvider, this.connectionFormService, {
       projectId,
       availableDrivers: availableDrivers ?? [],
       type: 'public',
@@ -81,15 +92,18 @@ export class PublicConnectionFormService {
       connectionId: config.connectionId,
     }).setMode(config.connectionId ? FormMode.Edit : FormMode.Create);
 
-    await this.optionsPart?.load();
+    const optionsPart = getConnectionFormOptionsPart(formState);
 
     if (config.driverId) {
-      await this.optionsPart?.setDriverId(config.driverId);
+      await optionsPart.setDriverId(config.driverId);
     }
 
-    Object.assign(this.optionsPart!.state, config);
+    await optionsPart.load();
 
-    this.formState.disposeTask.addHandler(this.close.bind(this, true));
+    Object.assign(optionsPart.state, config);
+
+    formState.disposeTask.addHandler(this.close.bind(this, true));
+    this.formState = formState;
   }
 
   async open(projectId: string, config: ConnectionConfig, availableDrivers?: string[]): Promise<boolean> {
@@ -117,10 +131,8 @@ export class PublicConnectionFormService {
   async save(): Promise<void> {
     const key = this.optionsPart?.connectionKey;
 
-    await this.close(true);
-
     if (key && this.connectionInfoResource.isConnected(key)) {
-      this.tryReconnect(key);
+      await this.tryReconnect(key);
     }
   }
 
@@ -174,23 +186,24 @@ export class PublicConnectionFormService {
       return true;
     }
 
-    const result = await this.commonDialogService.open(ConfirmationDialog, {
-      title: 'plugin_connections_connection_edit_cancel_title',
-      message: 'plugin_connections_connection_edit_cancel_message',
-      confirmActionText: 'ui_processing_ok',
+    const { status } = await this.commonDialogService.open(ConfirmationDialog, {
+      title: 'ui_discard_changes',
+      message: 'ui_discard_changes_message',
+      confirmActionText: 'ui_discard',
+      cancelActionText: 'ui_keep_editing',
     });
 
-    return result !== DialogueStateResult.Rejected;
+    return status !== DialogueStateResult.Rejected;
   }
 
   private async tryReconnect(connectionKey: IConnectionInfoParams) {
-    const result = await this.commonDialogService.open(ConfirmationDialog, {
+    const { status } = await this.commonDialogService.open(ConfirmationDialog, {
       title: 'plugin_connections_connection_edit_reconnect_title',
       message: 'plugin_connections_connection_edit_reconnect_message',
       confirmActionText: 'ui_reconnect',
     });
 
-    if (result === DialogueStateResult.Rejected) {
+    if (status === DialogueStateResult.Rejected) {
       return;
     }
 

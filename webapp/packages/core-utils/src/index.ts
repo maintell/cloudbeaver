@@ -1,10 +1,11 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
+
 export * from './Promises/CancellablePromise.js';
 export * from './Promises/cancellableTimeout.js';
 export * from './Promises/Deferred.js';
@@ -31,6 +32,7 @@ export * from './getPathName.js';
 export * from './getPathParent.js';
 export * from './getPathParents.js';
 export * from './getPathParts.js';
+export * from './isIp.js';
 export * from './GlobalConstants.js';
 export * from './ILoadableState.js';
 export * from './errorOf.js';
@@ -60,7 +62,6 @@ export * from './getUniqueName.js';
 export * from './isMapsEqual.js';
 export * from './isObjectsEqual.js';
 export * from './openCenteredPopup.js';
-export * from './download.js';
 export * from './downloadFromURL.js';
 export * from './getTextFileReadingProcess.js';
 export * from './getTextBetween.js';
@@ -79,11 +80,11 @@ export * from './removeMetadataFromDataURL.js';
 export * from './removeLineBreak.js';
 export * from './replaceSubstring.js';
 export * from './formatNumber.js';
-export * from './withTimestamp.js';
 export * from './toSafeHtmlString.js';
 export * from './getProgressPercent.js';
 export * from './types/UndefinedToNull.js';
 export * from './bindFunctions.js';
-export * from './getDomainFromUrl.js';
 export * from './isNumber.js';
 export * from './getSubjectDifferences.js';
+export * from './downloadImage.js';
+export * from './submitForm.js';

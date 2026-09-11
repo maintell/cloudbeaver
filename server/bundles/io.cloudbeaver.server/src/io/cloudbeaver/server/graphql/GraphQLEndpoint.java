@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ import io.cloudbeaver.WebServiceUtils;
 import io.cloudbeaver.model.apilog.ApiCallInterceptor;
 import io.cloudbeaver.model.session.WebSession;
 import io.cloudbeaver.registry.WebServiceRegistry;
-import io.cloudbeaver.server.HttpConstants;
 import io.cloudbeaver.server.WebAppUtils;
 import io.cloudbeaver.service.DBWBindingContext;
 import io.cloudbeaver.service.DBWServiceBindingGraphQL;
@@ -42,9 +41,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.jkiss.code.NotNull;
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.data.json.JSONUtils;
+import org.jkiss.dbeaver.utils.MimeTypes;
 import org.jkiss.utils.CommonUtils;
+import org.jkiss.utils.HttpConstants;
 import org.jkiss.utils.IOUtils;
 
 import java.io.IOException;
@@ -73,7 +76,7 @@ public class GraphQLEndpoint extends HttpServlet {
     public static final String API_PROTOCOL = "GraphQL";
     private final GraphQL graphQL;
 
-    private static final Gson gson = new GsonBuilder()
+    public static final Gson gson = new GsonBuilder()
         .serializeNulls()
         .setPrettyPrinting()
         .create();
@@ -143,9 +146,9 @@ public class GraphQLEndpoint extends HttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String contentType = request.getContentType();
-        if (CommonUtils.isEmpty(contentType) || !contentType.startsWith(HttpConstants.TYPE_JSON)) {
+        if (CommonUtils.isEmpty(contentType) || !contentType.startsWith(HttpConstants.CONTENT_TYPE_JSON)) {
             String error = "Bad request," + (CommonUtils.isEmpty(contentType)
                 ? " content type is missing"
                 : " incorrect content type:" + contentType);
@@ -200,16 +203,22 @@ public class GraphQLEndpoint extends HttpServlet {
     }
 
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         String path = request.getPathInfo();
         if (path == null) {
             path = request.getServletPath();
         }
         boolean develMode = ServletAppUtils.getServletApplication().getServerConfiguration().isDevelMode();
 
-        if (path.contentEquals("/schema.json") && develMode) {
+        if (!develMode) {
+            super.doGet(request, response);
+            return;
+        }
+
+        if (path.contentEquals("/schema.json")) {
             executeQuery(request, response, GraphQLConstants.SCHEMA_READ_QUERY, null, null);
-        } else if (path.contentEquals("/console") && develMode) {
+        } else if (path.contentEquals("/console")) {
+            response.setContentType(MimeTypes.TEXT_HTML);
             try (InputStream consolePageStream = WebServiceUtils.openStaticResource("static/graphiql/index.html")) {
                 IOUtils.copyStream(consolePageStream, response.getOutputStream());
             }
@@ -224,12 +233,20 @@ public class GraphQLEndpoint extends HttpServlet {
     }
 
     private void executeQuery(
-        HttpServletRequest request,
-        HttpServletResponse response,
-        String query,
-        Map<String, Object> variables,
-        String operationName
+        @NotNull HttpServletRequest request,
+        @NotNull HttpServletResponse response,
+        @NotNull String query,
+        @Nullable Map<String, Object> variables,
+        @Nullable String operationName
     ) throws IOException {
+
+        String userId = GraphQLLoggerUtil.getUserId(request);
+        LocalDateTime startTime = LocalDateTime.now();
+
+        if (isQueryHandledBeforeExecution(request, response, variables, operationName, userId)) {
+            return;
+        }
+
         Map<String, Object> mapOfContext =
             Map.of(
                 "request", request,
@@ -245,15 +262,6 @@ public class GraphQLEndpoint extends HttpServlet {
         if (operationName != null) {
             contextBuilder.operationName(operationName);
         }
-        String sessionId = GraphQLLoggerUtil.getSmSessionId(request);
-        String userId = GraphQLLoggerUtil.getUserId(request);
-        String loggerMessage = GraphQLLoggerUtil.buildLoggerMessage(sessionId, userId, variables);
-        if (operationName != null) {
-            log.debug("API > " + operationName + loggerMessage);
-        } else if (DEBUG) {
-            log.debug("API > " + query + loggerMessage);
-        }
-        LocalDateTime startTime = LocalDateTime.now();
         ExecutionInput executionInput = contextBuilder.build();
         ExecutionResult executionResult = null;
         Exception executionException = null;
@@ -269,16 +277,55 @@ public class GraphQLEndpoint extends HttpServlet {
             } else if (executionException != null) {
                 errorMessage = executionException.getMessage();
             }
-            if (WebAppUtils.getWebApplication() instanceof ApiCallInterceptor apiCallInterceptor) {
-                apiCallInterceptor.onApiCallEvent(request, variables, operationName, startTime, errorMessage, API_PROTOCOL);
-            }
+            notifyApiCallInterceptor(request, variables, operationName, userId, startTime, errorMessage);
         }
 
+        if (executionResult != null) {
+            writeExecutionResult(request, response, executionResult);
+        }
+    }
+
+    protected boolean isQueryHandledBeforeExecution(
+        @NotNull HttpServletRequest request,
+        @NotNull HttpServletResponse response,
+        @Nullable Map<String, Object> variables,
+        @Nullable String operationName,
+        @Nullable String userId
+    ) throws IOException {
+        return false;
+    }
+
+    protected void writeExecutionResult(
+        @NotNull HttpServletRequest request,
+        @NotNull HttpServletResponse response,
+        @NotNull ExecutionResult executionResult
+    ) throws IOException {
         Map<String, Object> resJSON = executionResult.toSpecification();
         String resString = gson.toJson(resJSON);
         setDevelHeaders(request, response);
         response.setContentType(GraphQLConstants.CONTENT_TYPE_JSON_UTF8);
         response.getWriter().print(resString);
+    }
+
+    protected void notifyApiCallInterceptor(
+        @NotNull HttpServletRequest request,
+        @Nullable Map<String, Object> variables,
+        @Nullable String operationName,
+        @Nullable String userId,
+        @NotNull LocalDateTime startTime,
+        @Nullable String errorMessage
+    ) {
+        if (WebAppUtils.getWebApplication() instanceof ApiCallInterceptor apiCallInterceptor) {
+            apiCallInterceptor.onApiCallEvent(
+                request,
+                variables,
+                CommonUtils.notEmpty(operationName),
+                userId,
+                startTime,
+                errorMessage,
+                API_PROTOCOL
+            );
+        }
     }
 
 
@@ -296,8 +343,8 @@ public class GraphQLEndpoint extends HttpServlet {
             if (exception instanceof GraphQLException && exception.getCause() != null) {
                 exception = exception.getCause();
             }
-            if (exception instanceof InvocationTargetException) {
-                exception = ((InvocationTargetException) exception).getTargetException();
+            if (exception instanceof InvocationTargetException ite) {
+                exception = ite.getTargetException();
             }
             log.debug(
                 "GraphQL call failed at '" + handlerParameters.getPath() + "'" /*+ ", " + handlerParameters.getArgumentValues()*/,
@@ -317,17 +364,17 @@ public class GraphQLEndpoint extends HttpServlet {
             if (!(exception instanceof GraphQLError)) {
                 exception = new DBWebException(exception.getMessage(), exception);
             }
-            if (exception instanceof DBWebException) {
-                ((DBWebException) exception).setPath(path.toList());
-                ((DBWebException) exception).setLocations(Collections.singletonList(sourceLocation));
+            if (exception instanceof DBWebException webException) {
+                webException.setPath(path.toList());
+                webException.setLocations(Collections.singletonList(sourceLocation));
             }
             var result = handlerResult.error((GraphQLError) exception).build();
             return CompletableFuture.completedFuture(result);
         }
     }
 
-
-    public static HttpServletRequest getServletRequest(DataFetchingEnvironment env) {
+    @NotNull
+    public static HttpServletRequest getServletRequestOrThrow(DataFetchingEnvironment env) {
         GraphQLContext context = env.getGraphQlContext();
         HttpServletRequest request = context.get("request");
         if (request == null) {
@@ -350,4 +397,8 @@ public class GraphQLEndpoint extends HttpServlet {
         return context.get("bindingContext");
     }
 
+    @NotNull
+    public GraphQL getGraphQL() {
+        return graphQL;
+    }
 }

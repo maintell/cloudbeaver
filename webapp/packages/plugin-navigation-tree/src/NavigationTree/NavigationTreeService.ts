@@ -39,7 +39,14 @@ interface INavigationNodeShowData {
   path: string[];
 }
 
-@injectable()
+@injectable(() => [
+  NavNodeManagerService,
+  ConnectionsManagerService,
+  ConnectionInfoResource,
+  NavNodeExtensionsService,
+  NavNodeInfoResource,
+  NavTreeResource,
+])
 export class NavigationTreeService extends View<string> {
   readonly treeState: MetadataMap<string, ITreeNodeState>;
   readonly nodeSelectionTask: ISyncExecutor<INavigationNodeSelectionData>;
@@ -94,7 +101,7 @@ export class NavigationTreeService extends View<string> {
         return false;
       }
 
-      const connectionParam = this.connectionInfoResource.getConnectionIdForNodeId(node.projectId, id);
+      const connectionParam = this.connectionInfoResource.getConnectionIdForNodeId(node.projectId, node.uri);
       let connection: Connection | undefined;
       if (connectionParam) {
         connection = await this.connectionInfoResource.load(connectionParam);

@@ -8,13 +8,22 @@
   },
   "references": [
     {
-      "path": "../../../common-typescript/@dbeaver/cli"
+      "path": "../../common-react/@dbeaver/react-tests"
+    },
+    {
+      "path": "../../common-typescript/@dbeaver/cli"
+    },
+    {
+      "path": "../../common-typescript/@dbeaver/js-helpers"
     },
     {
       "path": "../core-authentication"
     },
     {
       "path": "../core-blocks"
+    },
+    {
+      "path": "../core-browser"
     },
     {
       "path": "../core-cli"
@@ -75,14 +84,19 @@
     },
     {
       "path": "../plugin-navigation-tabs"
+    },
+    {
+      "path": "../plugin-script-export"
+    },
+    {
+      "path": "../plugin-sql-editor-codemirror"
     }
   ],
   "include": [
     "__custom_mocks__/**/*",
     "src/**/*",
     "src/**/*.json",
-    "src/**/*.css",
-    "src/**/*.scss"
+    "src/**/*.css"
   ],
   "exclude": [
     "**/node_modules",

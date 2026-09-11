@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-data-import",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -21,6 +23,7 @@
   },
   "dependencies": {
     "@cloudbeaver/core-blocks": "workspace:*",
+    "@cloudbeaver/core-connections": "workspace:*",
     "@cloudbeaver/core-di": "workspace:*",
     "@cloudbeaver/core-dialogs": "workspace:*",
     "@cloudbeaver/core-events": "workspace:*",
@@ -31,6 +34,7 @@
     "@cloudbeaver/core-settings": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
     "@cloudbeaver/core-view": "workspace:*",
+    "@cloudbeaver/plugin-data-export": "workspace:*",
     "@cloudbeaver/plugin-data-viewer": "workspace:*",
     "mobx": "^6",
     "mobx-react-lite": "^4",
@@ -43,6 +47,7 @@
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
     "@types/react": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

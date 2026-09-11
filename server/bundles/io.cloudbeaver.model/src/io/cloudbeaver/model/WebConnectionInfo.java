@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
  */
 package io.cloudbeaver.model;
 
+import io.cloudbeaver.DBWebException;
 import io.cloudbeaver.WebProjectImpl;
 import io.cloudbeaver.model.app.BaseWebAppConfiguration;
 import io.cloudbeaver.model.session.WebSession;
+import io.cloudbeaver.server.CBConstants;
 import io.cloudbeaver.service.security.SMUtils;
 import io.cloudbeaver.service.sql.WebDataFormat;
 import io.cloudbeaver.utils.CBModelConstants;
@@ -37,12 +39,15 @@ import org.jkiss.dbeaver.model.connection.DBPDriverConfigurationType;
 import org.jkiss.dbeaver.model.impl.auth.AuthModelDatabaseNative;
 import org.jkiss.dbeaver.model.meta.Property;
 import org.jkiss.dbeaver.model.navigator.DBNBrowseSettings;
-import org.jkiss.dbeaver.model.navigator.DBNDataSource;
+import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
+import org.jkiss.dbeaver.model.navigator.DBNUtils;
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.model.preferences.DBPPropertyDescriptor;
 import org.jkiss.dbeaver.model.preferences.DBPPropertySource;
 import org.jkiss.dbeaver.model.rm.RMConstants;
 import org.jkiss.dbeaver.model.rm.RMProjectPermission;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableParametrized;
+import org.jkiss.dbeaver.registry.DataSourcePreferenceStore;
 import org.jkiss.dbeaver.registry.network.NetworkHandlerDescriptor;
 import org.jkiss.dbeaver.registry.network.NetworkHandlerRegistry;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
@@ -58,7 +63,6 @@ import java.util.stream.Collectors;
 public class WebConnectionInfo {
 
     private static final Log log = Log.getLog(WebConnectionInfo.class);
-    public static final String SECURED_VALUE = "********";
 
     private static final String FEATURE_HAS_TOOLS = "hasTools";
     private static final String FEATURE_CONNECTED = "connected";
@@ -67,6 +71,11 @@ public class WebConnectionInfo {
     private static final String FEATURE_READ_ONLY = "readOnly";
     private static final String FEATURE_PROVIDED = "provided";
     private static final String FEATURE_MANAGEABLE = "manageable";
+
+    private static final String FEATURE_RESTRICT_DATA_EDIT = "restrictDataEdit";
+    private static final String FEATURE_RESTRICT_SCRIPT_EXECUTE = "restrictScriptExecute";
+    private static final String FEATURE_RESTRICT_DATA_IMPORT = "restrictDataImport";
+    private static final String FEATURE_RESTRICT_METADATA_EDIT = "restrictMetadataEdit";
 
     private static final String TOOL_SESSION_MANAGER = "sessionManager";
     
@@ -126,7 +135,7 @@ public class WebConnectionInfo {
         if (canViewReadOnlyConnections()) {
             return dataSourceContainer.getConnectionConfiguration().getHostName();
         }
-        return SECURED_VALUE;
+        return CBConstants.SECURED_VALUE;
     }
 
     @Property
@@ -134,7 +143,7 @@ public class WebConnectionInfo {
         if (canViewReadOnlyConnections()) {
             return dataSourceContainer.getConnectionConfiguration().getHostPort();
         }
-        return SECURED_VALUE;
+        return CBConstants.SECURED_VALUE;
     }
 
     @Property
@@ -147,7 +156,7 @@ public class WebConnectionInfo {
         if (canViewReadOnlyConnections()) {
             return dataSourceContainer.getConnectionConfiguration().getDatabaseName();
         }
-        return SECURED_VALUE;
+        return CBConstants.SECURED_VALUE;
     }
 
     @Property
@@ -155,7 +164,7 @@ public class WebConnectionInfo {
         if (canViewReadOnlyConnections()) {
             return dataSourceContainer.getConnectionConfiguration().getUrl();
         }
-        return SECURED_VALUE;
+        return CBConstants.SECURED_VALUE;
     }
 
     @Property
@@ -210,7 +219,8 @@ public class WebConnectionInfo {
 
     @Property
     public String getNodePath() {
-        return DBNDataSource.makeDataSourceItemPath(dataSourceContainer);
+        DBNDatabaseNode dsNode = DBNUtils.getNodeByObject(dataSourceContainer);
+        return dsNode == null ? null : dsNode.getNodeUri();
     }
 
     @Property
@@ -251,6 +261,7 @@ public class WebConnectionInfo {
     }
 
     @Property
+    @NotNull
     public String[] getFeatures() {
         List<String> features = new ArrayList<>();
 
@@ -269,6 +280,18 @@ public class WebConnectionInfo {
         if (dataSourceContainer.isConnectionReadOnly()) {
             features.add(FEATURE_READ_ONLY);
         }
+        if (!dataSourceContainer.hasModifyPermission(DBPDataSourcePermission.PERMISSION_EDIT_DATA)) {
+            features.add(FEATURE_RESTRICT_DATA_EDIT);
+        }
+        if (!dataSourceContainer.hasModifyPermission(DBPDataSourcePermission.PERMISSION_EXECUTE_SCRIPTS)) {
+            features.add(FEATURE_RESTRICT_SCRIPT_EXECUTE);
+        }
+        if (!dataSourceContainer.hasModifyPermission(DBPDataSourcePermission.PERMISSION_IMPORT_DATA)) {
+            features.add(FEATURE_RESTRICT_DATA_IMPORT);
+        }
+        if (!dataSourceContainer.hasModifyPermission(DBPDataSourcePermission.PERMISSION_EDIT_METADATA)) {
+            features.add(FEATURE_RESTRICT_METADATA_EDIT);
+        }
         if (dataSourceContainer.isProvided()) {
             features.add(FEATURE_PROVIDED);
         }
@@ -280,11 +303,29 @@ public class WebConnectionInfo {
     }
 
     @Property
+    @NotNull
     public DBNBrowseSettings getNavigatorSettings() {
         return dataSourceContainer.getNavigatorSettings();
     }
 
     @Property
+    @NotNull
+    public DBNBrowseSettings getDefaultNavigatorSettings() {
+        return dataSourceContainer.getNavigatorSettings().getOriginalSettings();
+    }
+
+    @Property
+    @NotNull
+    public Map<String, String> getDefaultUserPreferences() {
+        DBPPreferenceStore preferenceStore = dataSourceContainer.getPreferenceStore();
+        if (preferenceStore instanceof DataSourcePreferenceStore dataSourcePreferenceStore) {
+            return dataSourcePreferenceStore.getProperties();
+        }
+        return Collections.emptyMap();
+    }
+
+    @Property
+    @NotNull
     public List<WebDataFormat> getSupportedDataFormats() {
         List<WebDataFormat> formats = new ArrayList<>();
         formats.add(WebDataFormat.resultset);
@@ -299,11 +340,13 @@ public class WebConnectionInfo {
     }
 
     @Property
+    @NotNull
     public WebConnectionOriginInfo getOrigin() {
         return new WebConnectionOriginInfo(session, dataSourceContainer, dataSourceContainer.getOrigin());
     }
 
     @Property
+    @NotNull
     public DBPDriverConfigurationType getConfigurationType() {
         DBPDriverConfigurationType configurationType = dataSourceContainer.getConnectionConfiguration().getConfigurationType();
         if (configurationType == null) {
@@ -319,21 +362,37 @@ public class WebConnectionInfo {
             !dataSourceContainer.getDriver().isAnonymousAccess();
     }
 
+    public void validateConnection() throws DBWebException {
+
+    }
+
     // we don't show non-secured properties in FE when connecting to DB without saved credentials
     private boolean isAuthPropertiesEmpty() {
         return Arrays.stream(getAuthProperties()).allMatch(f -> f.hasFeature(DBConstants.PROP_FEATURE_NON_SECURED));
     }
 
     @Property
+    @NotNull
     public String getAuthModel() {
         String authModelId = dataSourceContainer.getConnectionConfiguration().getAuthModelId();
         if (CommonUtils.isEmpty(authModelId)) {
             authModelId = AuthModelDatabaseNative.ID;
         }
+
+        // Patch auth model
+        DBPAuthModelDescriptor authModel = DBWorkbench.getPlatform().getDataSourceProviderRegistry().getAuthModel(authModelId);
+        if (authModel != null) {
+            DBPAuthModelDescriptor amReplace = authModel.getReplacedBy(dataSourceContainer.getDriver());
+            if (amReplace != null && amReplace != authModel) {
+                return amReplace.getId();
+            }
+        }
+
         return authModelId;
     }
 
     @Property
+    @NotNull
     public WebPropertyInfo[] getAuthProperties() {
         String authModelId = getAuthModel();
         DBPAuthModelDescriptor authModel = DBWorkbench.getPlatform().getDataSourceProviderRegistry().getAuthModel(authModelId);
@@ -356,6 +415,7 @@ public class WebConnectionInfo {
     }
 
     @Property
+    @NotNull
     public List<WebNetworkHandlerConfig> getNetworkHandlersConfig() {
         var registry = NetworkHandlerRegistry.getInstance();
         return dataSourceContainer.getConnectionConfiguration()
@@ -370,20 +430,23 @@ public class WebConnectionInfo {
     }
 
     @Property
+    @Nullable
     public Map<String, Object> getCredentials() {
         //dataSourceContainer.getConnectionConfiguration().getCredentialsProvider().getCredentials();
         return null;
     }
 
+    @Nullable
     public Map<String, Object> getSavedAuthProperties() {
         return savedAuthProperties;
     }
 
+    @Nullable
     public List<WebNetworkHandlerConfigInput> getSavedNetworkCredentials() {
         return savedNetworkCredentials;
     }
 
-    public void setSavedCredentials(Map<String, Object> authProperties, List<WebNetworkHandlerConfigInput> networkCredentials) {
+    public void setSavedCredentials(@Nullable Map<String, Object> authProperties, @Nullable List<WebNetworkHandlerConfigInput> networkCredentials) {
         this.savedAuthProperties = authProperties;
         this.savedNetworkCredentials = networkCredentials;
     }
@@ -408,6 +471,7 @@ public class WebConnectionInfo {
     }
 
     @Property
+    @NotNull
     public Map<String, String> getMainPropertyValues() {
         Map<String, String> mainProperties = new LinkedHashMap<>();
         mainProperties.put(DBConstants.PROP_HOST, getHost());
@@ -415,6 +479,17 @@ public class WebConnectionInfo {
         mainProperties.put(DBConstants.PROP_DATABASE, getDatabaseName());
         mainProperties.put(DBConstants.PROP_SERVER, getServerName());
         return mainProperties;
+    }
+
+    @Property
+    public Map<String, Object> getExpertSettingsValues() {
+        Map<String, Object> expertSettings = new LinkedHashMap<>();
+        expertSettings.put(WebExpertSettingsProperties.PROP_AUTO_COMMIT_MODE, AutoCommitMode.fromValue(isAutocommit()));
+        expertSettings.put(WebExpertSettingsProperties.PROP_KEEP_ALIVE_INTERVAL, getKeepAliveInterval());
+        expertSettings.put(WebExpertSettingsProperties.PROP_READ_ONLY, isReadOnly());
+        expertSettings.put(WebExpertSettingsProperties.PROP_DEFAULT_CATALOG, getDefaultCatalogName());
+        expertSettings.put(WebExpertSettingsProperties.PROP_DEFAULT_SCHEMA, getDefaultSchemaName());
+        return expertSettings;
     }
 
     @Property
@@ -452,7 +527,7 @@ public class WebConnectionInfo {
         return dataSourceContainer.getRequiredExternalAuth();
     }
 
-    private boolean hasProjectPermission(RMProjectPermission projectPermission) {
+    private boolean hasProjectPermission(@NotNull RMProjectPermission projectPermission) {
         DBPProject project = dataSourceContainer.getProject();
         if (!(project instanceof WebProjectImpl webProject)) {
             return false;
@@ -483,27 +558,27 @@ public class WebConnectionInfo {
     }
 
     @Property
-    public boolean isAutocommit() {
-        Boolean isAutoCommit = dataSourceContainer.getConnectionConfiguration().getBootstrap().getDefaultAutoCommit();
-        if (isAutoCommit == null) {
-            return true;
-        }
-        return isAutoCommit;
+    @Nullable
+    public Boolean isAutocommit() {
+        return dataSourceContainer.getConnectionConfiguration().getBootstrap().getDefaultAutoCommit();
     }
 
     @Property
+    @Nullable
     public String getDefaultCatalogName() {
         DBPConnectionConfiguration connectionConfiguration = dataSourceContainer.getConnectionConfiguration();
         return connectionConfiguration.getBootstrap().getDefaultCatalogName();
     }
 
     @Property
+    @Nullable
     public String getDefaultSchemaName() {
         DBPConnectionConfiguration connectionConfiguration = dataSourceContainer.getConnectionConfiguration();
         return connectionConfiguration.getBootstrap().getDefaultSchemaName();
     }
 
     @Property
+    @NotNull
     public List<WebSecretInfo> getSharedSecrets() throws DBException {
         return dataSourceContainer.listSharedCredentials()
             .stream()
@@ -511,8 +586,8 @@ public class WebConnectionInfo {
             .collect(Collectors.toList());
     }
 
-    @NotNull
     @Property
+    @NotNull
     public List<String> getTools() {
         if (!session.hasPermission(RMConstants.PERMISSION_DATABASE_DEVELOPER)) {
             return List.of();
@@ -525,10 +600,25 @@ public class WebConnectionInfo {
         return tools;
     }
 
+    @NotNull
+    public String getConnectionType() {
+        return dataSourceContainer.getConnectionConfiguration().getConnectionType().getId();
+    }
+
     /**
      * Updates param that checks whether credentials were saved only in session.
      */
     public void setCredentialsSavedInSession(@Nullable Boolean credentialsSavedInSession) {
         this.credentialsSavedInSession = credentialsSavedInSession;
     }
+
+    /**
+     * Database-dependent driver configuration used to drive data import
+     */
+    @Property
+    @NotNull
+    public WebDriverConfiguration getDriverConfiguration() {
+        return new WebDriverConfiguration(dataSourceContainer);
+    }
+
 }

@@ -1,10 +1,11 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
+
 import { action, computed, makeObservable, observable, runInAction } from 'mobx';
 
 import { AppAuthService, UserInfoResource } from '@cloudbeaver/core-authentication';
@@ -19,6 +20,7 @@ import {
   CachedResourceOffsetPageTargetKey,
   getOffsetPageKeyInfo,
   type ICachedResourceMetadata,
+  hasMorePagesForResourceKey,
   isResourceAlias,
   isResourceKeyList,
   ResourceError,
@@ -59,7 +61,15 @@ export interface INavNodeRenameData {
   newNodeId: string;
 }
 
-@injectable()
+@injectable(() => [
+  GraphQLService,
+  NavNodeInfoResource,
+  NavTreeSettingsService,
+  SessionDataResource,
+  UserInfoResource,
+  ProjectInfoResource,
+  AppAuthService,
+])
 export class NavTreeResource extends CachedMapResource<string, string[], Record<string, unknown>, INodeMetadata> {
   readonly beforeNodeDelete: IExecutor<ResourceKeySimple<string>>;
   readonly onNodeRefresh: IExecutor<string>;
@@ -123,16 +133,20 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
     if (parents.length === 0) {
       return true;
     }
+
     parents = [...parents];
 
     let parent: string | undefined;
+    let isParentHasMoreData = false;
     let children: string[] = [];
 
     while (parents.length > 0) {
       const next = parents.shift()!;
-      if (parent !== undefined && !children.includes(next)) {
+
+      if (parent !== undefined && !children.includes(next) && !isParentHasMoreData) {
         return false;
       }
+
       await this.scheduler.waitRelease(next);
 
       if (this.isLoadable(next)) {
@@ -141,9 +155,10 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
         children = this.get(next) || [];
       }
       parent = next;
+      isParentHasMoreData = hasMorePagesForResourceKey(this, next);
     }
 
-    if (nextNode !== undefined && !children.includes(nextNode)) {
+    if (nextNode !== undefined && !children.includes(nextNode) && !isParentHasMoreData) {
       return false;
     }
 
@@ -151,7 +166,7 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
   }
 
   async refreshTree(navNodeId: string, silent = false): Promise<void> {
-    this.performUpdate(navNodeId, [], async () => {
+    await this.performUpdate(navNodeId, [], async () => {
       await this.graphQLService.sdk.navRefreshNode({
         nodePath: navNodeId,
       });
@@ -164,7 +179,7 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
   }
 
   async refreshNode(navNodeId: string, silent = false): Promise<void> {
-    this.performUpdate(navNodeId, [], async () => {
+    await this.performUpdate(navNodeId, [], async () => {
       await this.graphQLService.sdk.navRefreshNode({
         nodePath: navNodeId,
       });
@@ -271,7 +286,7 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
       include,
     });
 
-    this.refreshNode(nodePath);
+    await this.refreshNode(nodePath);
   }
 
   async changeName(node: NavNode, name: string): Promise<string> {
@@ -280,30 +295,26 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
       throw new Error("Root node can't be renamed");
     }
     const newNodeId = await this.performUpdate(parentId, [], async () => {
-      this.markLoading(node.id, true);
+      this.markLoading(node.uri, true);
       try {
-        await this.graphQLService.sdk.navRenameNode({
-          nodePath: node.id,
+        const { nodePath } = await this.graphQLService.sdk.navRenameNode({
+          nodePath: node.uri,
           newName: name,
         });
 
-        const parts = node.id.split('/');
-        parts.splice(parts.length - 1, 1, name);
-        const path = parts.join('/');
-
         this.markOutdated(parentId);
-        this.markLoaded(node.id);
+        this.markLoaded(node.uri);
         this.onDataOutdated.execute(parentId);
 
-        return path;
+        return nodePath;
       } finally {
-        this.markLoading(node.id, false);
+        this.markLoading(node.uri, false);
       }
     });
 
     await this.onNodeRename.execute({
       projectId: node.projectId,
-      nodeId: node.id,
+      nodeId: node.uri,
       newNodeId,
     });
     return newNodeId;
@@ -317,7 +328,7 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
 
     const node = this.navNodeInfoResource.get(from);
     if (node) {
-      node.id = to;
+      node.uri = to;
       node.name = getPathName(to);
       node.parentId = toParent;
       this.navNodeInfoResource.set(to, node);
@@ -502,7 +513,7 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
         isPageListKey
           ? CachedResourceOffsetPageListKey(offset, navNodeChildren.navNodeChildren.length).setParent(CachedResourceOffsetPageTargetKey(nodeId))
           : CachedResourceOffsetPageKey(offset, navNodeChildren.navNodeChildren.length).setParent(CachedResourceOffsetPageTargetKey(nodeId)),
-        navNodeChildren.navNodeChildren.map(node => node.id),
+        navNodeChildren.navNodeChildren.map(node => node.uri),
         navNodeChildren.navNodeChildren.length === limit,
       ]);
     });
@@ -549,11 +560,11 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
       for (const node of data) {
         const metadata = this.metadata.get(node.parentPath);
 
-        this.setDetails(resourceKeyList([node.navNodeInfo.id, ...node.navNodeChildren.map(node => node.id)]), metadata.withDetails);
+        this.setDetails(resourceKeyList([node.navNodeInfo.uri, ...node.navNodeChildren.map(node => node.uri)]), metadata.withDetails);
       }
 
       this.navNodeInfoResource.set(
-        resourceKeyList([...data.map(data => data.parentPath), ...data.map(data => data.navNodeChildren.map(node => node.id)).flat()]),
+        resourceKeyList([...data.map(data => data.parentPath), ...data.map(data => data.navNodeChildren.map(node => node.uri)).flat()]),
         [
           ...data.map(data => this.navNodeInfoResource.navNodeInfoToNavNode(data.navNodeInfo)).flat(),
           ...data.map(data => data.navNodeChildren.map(node => this.navNodeInfoResource.navNodeInfoToNavNode(node, data.parentPath))).flat(),
@@ -567,9 +578,9 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
     } else {
       const metadata = this.metadata.get(data.parentPath);
 
-      this.setDetails(resourceKeyList([data.navNodeInfo.id, ...data.navNodeChildren.map(node => node.id)]), metadata.withDetails);
+      this.setDetails(resourceKeyList([data.navNodeInfo.uri, ...data.navNodeChildren.map(node => node.uri)]), metadata.withDetails);
 
-      this.navNodeInfoResource.set(resourceKeyList([data.parentPath, ...data.navNodeChildren.map(node => node.id)]), [
+      this.navNodeInfoResource.set(resourceKeyList([data.parentPath, ...data.navNodeChildren.map(node => node.uri)]), [
         this.navNodeInfoResource.navNodeInfoToNavNode(data.navNodeInfo),
         ...data.navNodeChildren.map(node => this.navNodeInfoResource.navNodeInfoToNavNode(node, data.parentPath)),
       ]);
@@ -581,7 +592,7 @@ export class NavTreeResource extends CachedMapResource<string, string[], Record<
   private insertSlice(data: NavNodeChildrenQuery, offset: number, limit: number): string[] {
     let children = [...(this.get(data.parentPath) || [])];
 
-    children.splice(offset, limit, ...data.navNodeChildren.map(node => node.id));
+    children.splice(offset, limit, ...data.navNodeChildren.map(node => node.uri));
 
     if (data.navNodeChildren.length < limit) {
       children.splice(offset + data.navNodeChildren.length, children.length - offset - data.navNodeChildren.length);

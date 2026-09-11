@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-object-viewer",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -37,18 +39,19 @@
     "@cloudbeaver/plugin-data-grid": "workspace:*",
     "@cloudbeaver/plugin-navigation-tabs": "workspace:*",
     "@cloudbeaver/plugin-navigation-tree": "workspace:*",
-    "@dbeaver/js-helpers": "workspace:^",
+    "@dbeaver/js-helpers": "workspace:*",
+    "@dbeaver/ui-kit": "workspace:*",
     "mobx": "^6",
     "mobx-react-lite": "^4",
     "react": "^19",
     "react-dom": "^19",
-    "reakit": "^1",
     "tslib": "^2"
   },
   "devDependencies": {
     "@cloudbeaver/core-cli": "workspace:*",
     "@cloudbeaver/tsconfig": "workspace:*",
     "@types/react": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

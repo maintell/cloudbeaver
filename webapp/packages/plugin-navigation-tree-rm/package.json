@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-navigation-tree-rm",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -38,7 +40,7 @@
     "@cloudbeaver/plugin-navigation-tree": "workspace:*",
     "@cloudbeaver/plugin-projects": "workspace:*",
     "@cloudbeaver/plugin-resource-manager": "workspace:*",
-    "@dbeaver/js-helpers": "workspace:^",
+    "@dbeaver/js-helpers": "workspace:*",
     "mobx": "^6",
     "mobx-react-lite": "^4",
     "react": "^19",
@@ -50,6 +52,7 @@
     "@cloudbeaver/tsconfig": "workspace:*",
     "@dbeaver/cli": "workspace:*",
     "@types/react": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

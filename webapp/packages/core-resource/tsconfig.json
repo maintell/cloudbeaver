@@ -8,13 +8,13 @@
   },
   "references": [
     {
-      "path": "../../../common-typescript/@dbeaver/cli"
+      "path": "../../common-react/@dbeaver/react-tests"
+    },
+    {
+      "path": "../../common-typescript/@dbeaver/cli"
     },
     {
       "path": "../core-cli"
-    },
-    {
-      "path": "../core-di"
     },
     {
       "path": "../core-executor"
@@ -27,8 +27,7 @@
     "__custom_mocks__/**/*",
     "src/**/*",
     "src/**/*.json",
-    "src/**/*.css",
-    "src/**/*.scss"
+    "src/**/*.css"
   ],
   "exclude": [
     "**/node_modules",

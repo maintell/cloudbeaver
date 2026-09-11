@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2024 DBeaver Corp and others
+ * Copyright (C) 2020-2025 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ export interface ISessionAction {
   [key: string]: any;
 }
 
-@injectable()
+@injectable(() => [GraphQLService, SessionEventSource, SessionInfoEventHandler, ServerConfigResource, LocalizationService])
 export class SessionResource extends CachedDataResource<SessionState | null> {
   private action: ISessionAction | null;
 
@@ -76,15 +76,17 @@ export class SessionResource extends CachedDataResource<SessionState | null> {
 
   async changeLanguage(locale: string): Promise<void> {
     await this.load();
-    //TODO we check "!locale" because of the bug described in CB-6048, should be removed when fixed
-    if (this.data?.locale === locale || !locale) {
-      return;
-    }
-    await this.graphQLService.sdk.changeSessionLanguage({ locale });
 
-    if (this.data) {
-      this.data.locale = locale;
-    }
+    this.performUpdate(undefined, [], async () => {
+      if (this.data?.locale === locale) {
+        return;
+      }
+      await this.graphQLService.sdk.changeSessionLanguage({ locale });
+
+      if (this.data) {
+        this.data.locale = locale;
+      }
+    });
 
     this.markOutdated();
   }

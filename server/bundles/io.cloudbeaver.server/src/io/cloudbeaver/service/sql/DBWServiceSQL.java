@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package io.cloudbeaver.service.sql;
 import io.cloudbeaver.DBWConstants;
 import io.cloudbeaver.DBWebException;
 import io.cloudbeaver.WebAction;
+import io.cloudbeaver.WebObjectId;
 import io.cloudbeaver.model.WebAsyncTaskInfo;
 import io.cloudbeaver.model.WebConnectionInfo;
 import io.cloudbeaver.model.WebTransactionLogInfo;
@@ -71,12 +72,34 @@ public interface DBWServiceSQL extends DBWService {
         @NotNull WebSession session,
         @NotNull List<String> nodePathList) throws DBWebException;
 
+    @NotNull
     @WebAction
     String generateEntityQuery(
         @NotNull WebSession session,
         @NotNull String generatorId,
-        @NotNull Map<String, Object> options,
-        @NotNull List<String> nodePathList) throws DBWebException;
+        @NotNull List<String> nodePathList,
+        @NotNull WebSQLGeneratorOptions options
+    ) throws DBWebException;
+
+    @NotNull
+    @WebAction
+    WebAsyncTaskInfo asyncGenerateEntityQuery(
+        @NotNull WebSession session,
+        @NotNull String generatorId,
+        @NotNull List<String> nodePathList,
+        @NotNull WebSQLGeneratorOptions options
+    ) throws DBWebException;
+
+    @NotNull
+    @WebAction
+    String sqlGenerateResultSetQuery(
+        @NotNull WebSession session,
+        @NotNull WebSQLContextInfo sqlContext,
+        @NotNull String generatorId,
+        @NotNull String resultsId,
+        @NotNull List<WebSQLResultsRow> selectedRows,
+        @NotNull WebSQLGeneratorOptions options
+    ) throws DBWebException;
 
     @WebAction
     WebSQLContextInfo createContext(
@@ -93,13 +116,16 @@ public interface DBWServiceSQL extends DBWService {
 
     @WebAction(requireGlobalPermissions = DBWConstants.GLOBAL_PERMISSION_SCRIPT_EXECUTE)
     WebAsyncTaskInfo asyncExecuteQuery(
+        @NotNull WebSession webSession,
+        @WebObjectId @NotNull String projectId,
         @NotNull WebSQLContextInfo contextInfo,
         @NotNull String sql,
         @Nullable String resultId,
         @Nullable WebSQLDataFilter filter,
         @Nullable WebDataFormat dataFormat,
         boolean readLogs,
-        @NotNull WebSession webSession) throws DBException;
+        boolean useEvents
+    ) throws DBException;
 
     @WebAction
     WebAsyncTaskInfo asyncReadDataFromContainer(
@@ -108,6 +134,14 @@ public interface DBWServiceSQL extends DBWService {
         @Nullable String resultId,
         @Nullable WebSQLDataFilter filter,
         @Nullable WebDataFormat dataFormat) throws DBWebException;
+
+    @WebAction
+    List<WebSQLQueryResultAssociation> getSqlResultAssociations(
+        @NotNull WebSession webSession,
+        @NotNull WebSQLContextInfo contextInfo,
+        @NotNull String resultsId,
+        @Nullable Boolean isReference
+    ) throws DBException;
 
     /**
      * Reads dynamic trace from provided database results.
@@ -126,7 +160,7 @@ public interface DBWServiceSQL extends DBWService {
     /**
      * Updates result set data (sync function).
      */
-    @WebAction
+    @WebAction(requireGlobalPermissions = DBWConstants.GLOBAL_PERMISSION_DATA_EDITOR_EDITING)
     @Deprecated // use async function
     WebSQLExecuteInfo updateResultsDataBatch(
         @NotNull WebSQLContextInfo contextInfo,
@@ -140,7 +174,7 @@ public interface DBWServiceSQL extends DBWService {
     /**
      * Creates async task for updating results data.
      */
-    @WebAction
+    @WebAction(requireGlobalPermissions = DBWConstants.GLOBAL_PERMISSION_DATA_EDITOR_EDITING)
     WebAsyncTaskInfo asyncUpdateResultsDataBatch(
         @NotNull WebSession webSession,
         @NotNull WebSQLContextInfo contextInfo,
@@ -169,7 +203,7 @@ public interface DBWServiceSQL extends DBWService {
         @NotNull Integer lobColumnIndex,
         @NotNull WebSQLResultsRow row) throws DBWebException;
 
-    @WebAction
+    @WebAction(requireGlobalPermissions = DBWConstants.GLOBAL_PERMISSION_DATA_EDITOR_EDITING)
     String updateResultsDataBatchScript(
         @NotNull WebSQLContextInfo contextInfo,
         @NotNull String resultsId,
@@ -197,11 +231,26 @@ public interface DBWServiceSQL extends DBWService {
     WebSQLQueryInfo parseSqlQuery(@NotNull WebConnectionInfo connectionInfo, @NotNull String sqlScript, int cursorPosition) throws DBWebException;
 
     @WebAction
+    @Deprecated
     String generateGroupByQuery(@NotNull WebSQLContextInfo contextInfo,
                                 @NotNull String resultsId,
                                 @NotNull List<String> columnsList,
                                 @Nullable List<String> functions,
                                 @Nullable Boolean showDuplicatesOnly) throws DBWebException;
+
+    @WebAction
+    WebAsyncTaskInfo getGroupingSqlResultSet(
+        @NotNull WebSession webSession,
+        @NotNull WebSQLContextInfo contextInfo,
+        @NotNull String originalResultsId,
+        @Nullable String currentResultsId,
+        @NotNull List<String> columnsList,
+        @Nullable List<String> functions,
+        @Nullable Boolean showDuplicatesOnly,
+        @Nullable WebSQLDataFilter filter,
+        @Nullable WebDataFormat dataFormat,
+        boolean isInteractive
+    ) throws DBException;
 
     @WebAction
     WebAsyncTaskInfo getRowDataCount(@NotNull WebSession webSession, @NotNull WebSQLContextInfo contextInfo, @NotNull String resultsId) throws DBWebException;

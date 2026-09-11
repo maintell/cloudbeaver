@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,15 @@
  */
 package io.cloudbeaver.server.websockets;
 
-import io.cloudbeaver.DBWebException;
 import io.cloudbeaver.model.session.BaseWebSession;
-import io.cloudbeaver.model.session.WebSession;
 import io.cloudbeaver.websocket.CBWebSessionEventHandler;
 import jakarta.websocket.*;
+import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
-import org.jkiss.dbeaver.model.websocket.event.WSClientEvent;
 import org.jkiss.dbeaver.model.websocket.event.WSEvent;
-import org.jkiss.dbeaver.model.websocket.event.client.WSSessionPingClientEvent;
-import org.jkiss.dbeaver.model.websocket.event.client.WSSubscribeOnTopicClientEvent;
-import org.jkiss.dbeaver.model.websocket.event.client.WSUnsubscribeFromTopicClientEvent;
-import org.jkiss.dbeaver.model.websocket.event.client.WSUpdateActiveProjectsClientEvent;
 import org.jkiss.dbeaver.model.websocket.event.session.WSAccessTokenExpiredEvent;
 import org.jkiss.dbeaver.model.websocket.event.session.WSSocketConnectedEvent;
-import org.jkiss.utils.CommonUtils;
 
 import java.time.Duration;
 
@@ -39,7 +32,11 @@ public class CBEventsWebSocket extends CBAbstractWebSocket implements CBWebSessi
     private static final Log log = Log.getLog(CBEventsWebSocket.class);
 
     @Nullable
-    private BaseWebSession webSession;
+    private volatile BaseWebSession webSession;
+    @Nullable
+    private FromUserEventHandler eventProcessor;
+    @Nullable
+    private WebSocketPingPongCallback pingPongCallback;
 
     @Override
     public void onOpen(Session session, EndpointConfig config) {
@@ -50,71 +47,50 @@ public class CBEventsWebSocket extends CBAbstractWebSocket implements CBWebSessi
         } else {
             this.webSession = (BaseWebSession) session.getUserProperties()
                 .get(CBWebSocketServerConfigurator.PROP_WEB_SESSION);
+            if (this.webSession == null) {
+                log.debug("No web session for websocket connection, closing");
+                close();
+                return;
+            }
             this.webSession.addEventHandler(this);
             handleEvent(new WSSocketConnectedEvent(webSession.getApplication().getApplicationRunId()));
             log.debug("EventWebSocket connected to the " + webSession.getSessionId() + " session");
 
             session.setMaxIdleTimeout(Duration.ofMinutes(5).toMillis());
-            session.addMessageHandler(String.class, new FromUserEventHandler());
-            session.addMessageHandler(PongMessage.class, new WebSocketPingPongCallback(webSession));
+            this.eventProcessor = new FromUserEventHandler(webSession);
+            session.addMessageHandler(String.class, eventProcessor);
+            this.pingPongCallback = new WebSocketPingPongCallback(webSession);
+            session.addMessageHandler(PongMessage.class, pingPongCallback);
 
             CBJettyWebSocketManager.registerWebSocket(webSession.getSessionId(), this);
         }
     }
 
-    private class FromUserEventHandler implements MessageHandler.Whole<String> {
+    @Override
+    public void migrateToSession(@NotNull BaseWebSession newSession) {
+        BaseWebSession oldSession = this.webSession;
+        this.webSession = newSession;
+        if (eventProcessor != null) {
+            eventProcessor.setWebSession(newSession);
+        }
+        if (pingPongCallback != null) {
+            pingPongCallback.setWebSession(newSession);
+        }
+        if (oldSession != null) {
+            CBJettyWebSocketManager.migrateWebSocket(oldSession.getSessionId(), newSession.getSessionId(), this);
+        }
+        log.debug("EventWebSocket migrated to the " + newSession.getSessionId() + " session");
+    }
+
+    private static class FromUserEventHandler extends CBClientEventProcessor implements MessageHandler.Whole<String> {
+
+        private FromUserEventHandler(@NotNull BaseWebSession webSession) {
+            super(webSession);
+        }
+
         @Override
-        public void onMessage(String message) {
-            if (CommonUtils.isEmpty(message)) {
-                return;
-            }
-            if (webSession == null) {
-                log.warn("No web session for browser event");
-                return;
-            }
-            WSClientEvent clientEvent;
-            try {
-                clientEvent = CBAbstractWebSocket.gson.fromJson(message, WSClientEvent.class);
-            } catch (Exception e) {
-                if (webSession != null) {
-                    webSession.addSessionError(
-                        new DBWebException("Invalid websocket event: " + e.getMessage())
-                    );
-                }
-                log.error("Error parsing websocket event: " + e.getMessage(), e);
-                return;
-            }
-            if (clientEvent.getId() == null) {
-                webSession.addSessionError(
-                    new DBWebException("Invalid websocket event: " + message)
-                );
-                return;
-            }
-            switch (clientEvent.getId()) {
-                case WSSubscribeOnTopicClientEvent.ID: {
-                    webSession.getEventsFilter().subscribeOnEventTopic(clientEvent.getTopicId());
-                    break;
-                }
-                case WSUnsubscribeFromTopicClientEvent.ID: {
-                    webSession.getEventsFilter().unsubscribeFromEventTopic(clientEvent.getTopicId());
-                    break;
-                }
-                case WSUpdateActiveProjectsClientEvent.ID: {
-                    var projectEvent = (WSUpdateActiveProjectsClientEvent) clientEvent;
-                    webSession.getEventsFilter().setSubscribedProjects(projectEvent.getProjectIds());
-                    break;
-                }
-                case WSSessionPingClientEvent.ID: {
-                    if (webSession instanceof WebSession session) {
-                        session.updateInfo(true);
-                    }
-                    break;
-                }
-                default:
-                    var e = new DBWebException("Unknown websocket client event: " + clientEvent.getId());
-                    log.error(e.getMessage(), e);
-                    webSession.addSessionError(e);
-            }
+        public void onMessage(@Nullable String message) {
+            process(message);
         }
     }
 

@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -31,17 +31,21 @@ export const Driver = observer<Props>(function Driver({ driver, onSelect }) {
   const styles = useS(style);
 
   return (
-    <ListItem onClick={select}>
+    <ListItem title={driver.description} onClick={select}>
       <ListItemIcon className={s(styles, { icon: true })}>
-        <StaticImage icon={driver.icon} className={s(styles, { staticImage: true })} />
+        <StaticImage role="presentation" icon={driver.icon} className={s(styles, { staticImage: true })} />
         {!driver.driverInstalled && (
           <div className={s(styles, { indicator: true })} title={translate('core_connections_connection_driver_not_installed')}>
-            <IconOrImage icon="/icons/info_icon_sm.svg" />
+            <IconOrImage icon="/icons/preload/info_icon_sm.svg" />
           </div>
         )}
       </ListItemIcon>
-      <ListItemName>{driver.name}</ListItemName>
-      <ListItemDescription title={driver.description}>{driver.description}</ListItemDescription>
+      <ListItemName className={s(styles, { cell: true })}>
+        <span title={driver.name}>{driver.name}</span>
+      </ListItemName>
+      <ListItemDescription className={s(styles, { cell: true })} title={driver.description}>
+        {driver.description}
+      </ListItemDescription>
     </ListItem>
   );
 });

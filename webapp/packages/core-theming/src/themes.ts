@@ -12,18 +12,20 @@ export const themes: ITheme[] = [
     name: 'ui_light_theme',
     id: 'light',
     class: 'light',
+    type: 'light',
     loaded: false,
     loader: async (): Promise<void> => {
-      await import('./styles/main/light.theme.scss');
+      await import('./styles/main/light.theme.css');
     },
   },
   {
     name: 'ui_dark_theme',
     id: 'dark',
     class: 'dark',
+    type: 'dark',
     loaded: false,
     loader: async (): Promise<void> => {
-      await import('./styles/main/dark.theme.scss');
+      await import('./styles/main/dark.theme.css');
     },
   },
 ];

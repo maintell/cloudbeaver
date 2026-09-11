@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2024 DBeaver Corp and others
+ * Copyright (C) 2020-2025 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,26 @@ import { KEY_BINDING_SQL_EDITOR_SAVE_AS_SCRIPT } from './KEY_BINDING_SQL_EDITOR_
 import { ResourceSqlDataSource } from './ResourceSqlDataSource.js';
 import { SqlEditorTabResourceService } from './SqlEditorTabResourceService.js';
 
-@injectable()
+@injectable(() => [
+  NavNodeManagerService,
+  NavNodeInfoResource,
+  NavigationTabsService,
+  NotificationService,
+  SqlEditorNavigatorService,
+  ResourceManagerService,
+  ProjectsService,
+  ProjectInfoResource,
+  SqlEditorTabResourceService,
+  CommonDialogService,
+  ActionService,
+  MenuService,
+  SqlDataSourceService,
+  SqlEditorSettingsService,
+  ResourceManagerResource,
+  ResourceManagerScriptsService,
+  KeyBindingService,
+  SqlEditorView,
+])
 export class PluginBootstrap extends Bootstrap {
   constructor(
     private readonly navNodeManagerService: NavNodeManagerService,
@@ -113,7 +132,7 @@ export class PluginBootstrap extends Bootstrap {
 
         return this.resourceManagerService.enabled && !!dataSource?.hasFeature(ESqlDataSourceFeatures.script);
       },
-      getItems: (context, items) => [...items, ACTION_SAVE_AS_SCRIPT],
+      getItems: (context, items) => [ACTION_SAVE_AS_SCRIPT, ...items],
     });
 
     this.keyBindingService.addKeyBindingHandler({
@@ -147,7 +166,7 @@ export class PluginBootstrap extends Bootstrap {
       }
     }
 
-    const result = await this.commonDialogService.open(SaveScriptDialog, {
+    const { status, result } = await this.commonDialogService.open(SaveScriptDialog, {
       defaultScriptName: name,
       projectId,
       validation: async ({ name, projectId }, setMessage) => {
@@ -176,7 +195,7 @@ export class PluginBootstrap extends Bootstrap {
       },
     });
 
-    if (result !== DialogueStateResult.Rejected && result !== DialogueStateResult.Resolved) {
+    if (status === DialogueStateResult.Resolved && result !== undefined) {
       try {
         projectId = result.projectId;
 
@@ -217,6 +236,8 @@ export class PluginBootstrap extends Bootstrap {
 
         if (!this.resourceManagerScriptsService.active) {
           this.resourceManagerScriptsService.togglePanel();
+        } else {
+          this.resourceManagerScriptsService.selectTab();
         }
       } catch (exception) {
         this.notificationService.logException(exception as any, 'plugin_sql_editor_navigation_tab_resource_save_script_error');
@@ -305,11 +326,11 @@ export class PluginBootstrap extends Bootstrap {
       return false;
     }
 
-    if (!node || node.nodeType !== NAV_NODE_TYPE_RM_RESOURCE || !isResourceOfType(resourceType, node.id)) {
+    if (!node || node.nodeType !== NAV_NODE_TYPE_RM_RESOURCE || !isResourceOfType(resourceType, node.uri)) {
       return false;
     }
 
-    const resourceKey = getResourceKeyFromNodeId(node.id);
+    const resourceKey = getResourceKeyFromNodeId(node.uri);
 
     if (!resourceKey) {
       return false;

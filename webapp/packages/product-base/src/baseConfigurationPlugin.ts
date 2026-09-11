@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,16 @@ import type { PluginOption } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { baseHtmlPlugin } from './baseHtmlPlugin.js';
-import { copyAssetsPlugin } from './copy-assets/copyAssetsPlugin.js';
+import { copyAssetsPlugin, getIconSpriteAsset } from './copy-assets/copyAssetsPlugin.js';
 import { manualChunks } from './manualChunks.js';
 import tailwindcss from '@tailwindcss/vite';
+import legacy from '@vitejs/plugin-legacy';
 
 export function baseConfigurationPlugin(mode: string, packageJson: any): PluginOption {
   const isProduction = mode === 'production';
   const envServer = process.env['server'];
   const productVersion = isProduction ? withTimestamp(packageJson.version) : packageJson.version;
+  const iconSprite = getIconSpriteAsset();
 
   return [
     tscPlugin({
@@ -34,8 +36,14 @@ export function baseConfigurationPlugin(mode: string, packageJson: any): PluginO
       version: productVersion,
       title: packageJson.product?.name || 'CloudBeaver',
       rootUri: '/',
+      iconSpriteUri: iconSprite.uri,
     }),
-    copyAssetsPlugin(),
+    copyAssetsPlugin(iconSprite),
+    legacy({
+      modernTargets: 'last 3 years, not dead',
+      modernPolyfills: true,
+      renderLegacyChunks: false,
+    }),
     {
       name: 'base-configuration',
       enforce: 'pre',
@@ -46,6 +54,7 @@ export function baseConfigurationPlugin(mode: string, packageJson: any): PluginO
           define: {
             ...config.define,
             _VERSION_: JSON.stringify(productVersion),
+            _ICON_SPRITE_URI_: JSON.stringify(iconSprite.uri),
             _DEV_: !isProduction,
           },
           server: {
@@ -82,9 +91,11 @@ export function baseConfigurationPlugin(mode: string, packageJson: any): PluginO
             minify: isProduction,
             emptyOutDir: true,
             modulePreload: false,
-            /* We need to disable css splitting because of the issue with loading CSS for some chunks (dbeaver/pro#5599), can be removed when dbeaver/pro#5204 is done */
+            /* We need to disable css splitting because of the issue with loading CSS for some chunks 
+            (dbeaver/pro#5599), can be removed when dbeaver/pro#5204 is done */
             cssCodeSplit: false,
-            /* Imported or referenced assets that are smaller than this threshold will be inlined as base64 URLs to avoid extra http requests. Set to 0 to disable inlining altogether. */
+            /* Imported or referenced assets that are smaller than this threshold will be inlined as base64 
+            URLs to avoid extra http requests. Set to 0 to disable inlining altogether. */
             assetsInlineLimit: 0,
 
             rollupOptions: {
@@ -112,6 +123,7 @@ export function baseConfigurationPlugin(mode: string, packageJson: any): PluginO
             manifest: false,
             injectManifest: {
               maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
+              globPatterns: ['**/icons/preload/**/*.{svg,png,jpg,gif,jpeg}'],
               globIgnores: [
                 '**/license.txt',
                 '**/*.map',
@@ -119,7 +131,6 @@ export function baseConfigurationPlugin(mode: string, packageJson: any): PluginO
                 '**/*.{ts,tsx}',
                 '**/*.tsbuildinfo',
                 '**/.DS_Store',
-                '**/*.{svg,png,jpg,gif,jpeg}',
                 '**/*.{woff,woff2,eot,ttf,otf}',
               ],
             },

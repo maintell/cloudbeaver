@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -31,8 +31,8 @@ export const BooleanFormatter = observer<ICellFormatterProps>(function BooleanFo
   }
 
   const formatter = tableDataContext.format;
-  const value = getComputed(() => formatter.get(cell));
-  const textValue = getComputed(() => formatter.getText(cell));
+  const cellHolder = getComputed(() => formatter.get(cell));
+  const textValue = getComputed(() => formatter.getText(cellHolder));
   const booleanValue = getComputed(() => textValue.toLowerCase() === 'true');
   const disabled =
     context.model.isReadonly(context.resultIndex) || (formatter.isReadOnly(cell) && cellContext.editionState !== DatabaseEditChangeType.add);
@@ -47,16 +47,16 @@ export const BooleanFormatter = observer<ICellFormatterProps>(function BooleanFo
       return;
     }
 
-    const nextValue = !resultColumn.required && value === false ? null : !booleanValue;
+    const nextValue = !resultColumn.required && cellHolder.value === false ? null : !booleanValue;
 
-    tableDataContext.editor.set(cell, nextValue);
+    tableDataContext.editor?.set(cell, nextValue);
   }
 
   return (
     <GridBooleanFormatter
       focusable={!cellContext.isMenuVisible}
       className={s(style, { formatter: true })}
-      value={value as boolean | null}
+      value={cellHolder.value as boolean | null}
       onClick={toggleValue}
       onKeyDown={toggleValue}
     />

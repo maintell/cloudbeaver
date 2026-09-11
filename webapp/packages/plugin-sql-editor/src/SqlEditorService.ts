@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,18 @@ export interface ISqlEditorActiveQueryUpdateData {
   };
 }
 
-@injectable()
+@injectable(() => [
+  GraphQLService,
+  ConnectionsManagerService,
+  NotificationService,
+  ConnectionExecutionContextService,
+  ConnectionExecutionContextResource,
+  ConnectionInfoResource,
+  SqlDataSourceService,
+  SqlEditorSettingsService,
+  ServerConfigResource,
+  SqlQueryService,
+])
 export class SqlEditorService {
   get autoSave(): boolean {
     return this.sqlEditorSettingsService.autoSave && !this.serverConfigResource.isFeatureEnabled(FEATURE_GIT_ID, true);
@@ -86,7 +97,6 @@ export class SqlEditorService {
       tabs: observable([]),
       resultGroups: observable([]),
       resultTabs: observable([]),
-      executionPlanTabs: observable([]),
       statisticsTabs: observable([]),
       outputLogsTab: undefined,
       currentModeId: undefined,
@@ -173,8 +183,18 @@ export class SqlEditorService {
     }
   }
 
-  async setConnection(state: ISqlEditorTabState, connectionKey: IConnectionInfoParams, catalogId?: string, schemaId?: string): Promise<boolean> {
+  async setConnection(
+    state: ISqlEditorTabState,
+    connectionKey: IConnectionInfoParams | null,
+    catalogId?: string,
+    schemaId?: string,
+  ): Promise<boolean> {
     try {
+      if (!connectionKey) {
+        await this.resetExecutionContext(state);
+        return true;
+      }
+
       const executionContext = await this.initContext(connectionKey, catalogId, schemaId);
       const dataSource = this.sqlDataSourceService.get(state.editorId);
 
@@ -217,6 +237,10 @@ export class SqlEditorService {
           executionContext.defaultCatalog,
           executionContext.defaultSchema,
         );
+
+        if (!context) {
+          return;
+        }
 
         if (!context?.context) {
           await this.resetExecutionContext(state);

@@ -60,10 +60,10 @@ export const TableError = observer<Props>(function TableError({ model, loading, 
   const errorHidden = errorInfo.error === null;
   const quote = internalServerError?.errorType === ServerErrorType.QUOTE_EXCEEDED;
 
-  let icon = '/icons/error_icon.svg';
+  let icon = '/icons/preload/error_icon.svg';
 
   if (quote) {
-    icon = '/icons/info_icon.svg';
+    icon = '/icons/preload/info_icon.svg';
   }
 
   let onRetry = () => model.retry();
@@ -89,8 +89,9 @@ export const TableError = observer<Props>(function TableError({ model, loading, 
   return (
     <div
       role="status"
+      aria-hidden={!error.error}
       aria-label={error.message}
-      tabIndex={0}
+      tabIndex={error.error ? 0 : -1}
       className={s(style, { error: true, animated, collapsed: !errorInfo.display, errorHidden }, className)}
     >
       <div className={s(style, { errorBody: true })}>

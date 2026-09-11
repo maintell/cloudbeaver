@@ -16,11 +16,11 @@
  */
 package io.cloudbeaver.model.config;
 
+import com.google.common.net.InetAddresses;
 import com.google.gson.annotations.SerializedName;
 import io.cloudbeaver.auth.CBAuthConstants;
 import io.cloudbeaver.model.app.WebServerConfiguration;
 import io.cloudbeaver.server.CBConstants;
-import io.cloudbeaver.utils.ServletAppUtils;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.Log;
 
@@ -31,7 +31,6 @@ public class CBServerConfig implements WebServerConfiguration {
 
     private static final Log log = Log.getLog(CBServerConfig.class);
 
-    protected String serverURL;
     @NotNull
     protected List<String> supportedHosts = new ArrayList<>();
     protected boolean forceHttps;
@@ -55,14 +54,11 @@ public class CBServerConfig implements WebServerConfiguration {
     @SerializedName("database")
     private WebDatabaseConfig databaseConfiguration = new WebDatabaseConfig();
     private String staticContent = "";
-    private boolean bindSessionToIp = true;
+    @NotNull
+    private String bindSessionToIp = CBConstants.BIND_SESSION_DISABLE;
 
     public CBServerConfig() {
         this.securityManagerConfiguration = createSecurityManagerConfiguration();
-    }
-
-    public String getServerURL() {
-        return serverURL;
     }
 
     public int getServerPort() {
@@ -85,10 +81,12 @@ public class CBServerConfig implements WebServerConfiguration {
         return contentRoot;
     }
 
+    @NotNull
     public String getRootURI() {
         return rootURI;
     }
 
+    @NotNull
     public String getServicesURI() {
         return serviceURI;
     }
@@ -103,10 +101,6 @@ public class CBServerConfig implements WebServerConfiguration {
 
     public String getStaticContent() {
         return staticContent;
-    }
-
-    public void setServerURL(String serverURL) {
-        this.serverURL = serverURL;
     }
 
     public void setServerPort(int serverPort) {
@@ -204,9 +198,23 @@ public class CBServerConfig implements WebServerConfiguration {
         LinkedHashSet<String> uniqueHosts = new LinkedHashSet<>();
         for (String host : availableHosts) {
             try {
+                if (!host.startsWith("http://") && !host.startsWith("https://")) {
+                    host = "http://" + host; // Default to HTTP if no scheme is provided to avoid uri parse exception
+                }
                 URI uri = URI.create(host);
-                String hostName = ServletAppUtils.removeSideSlashes(uri.getHost() != null ? uri.getHost() : host);
-                uniqueHosts.add(hostName);
+                String hostName = uri.getHost() != null ? uri.getHost() : host;
+                if (InetAddresses.isInetAddress(hostName)) {
+                    log.warn("Host URI contains an IP address: " + hostName + ", skipped.");
+                    continue;
+                }
+                StringBuilder hostNameBuilder = new StringBuilder(hostName);
+
+                if (uri.getPort() > 0) {
+                    hostNameBuilder.append(':')
+                        .append(uri.getPort());
+                }
+
+                uniqueHosts.add(hostNameBuilder.toString());
             } catch (Exception e) {
                 log.error("Invalid host URI: " + host, e);
             }
@@ -215,7 +223,12 @@ public class CBServerConfig implements WebServerConfiguration {
         this.supportedHosts.addAll(uniqueHosts);
     }
 
-    public boolean isBindSessionToIp() {
+    @NotNull
+    public String getBindSessionToIp() {
         return bindSessionToIp;
+    }
+
+    public void setBindSessionToIp(@NotNull String bindSessionToIp) {
+        this.bindSessionToIp = bindSessionToIp;
     }
 }

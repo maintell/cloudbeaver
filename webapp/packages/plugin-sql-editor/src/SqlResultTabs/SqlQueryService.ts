@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -10,15 +10,15 @@ import { makeObservable, observable } from 'mobx';
 import { ConnectionExecutionContextService, ConnectionInfoResource, createConnectionParam } from '@cloudbeaver/core-connections';
 import { injectable, IServiceProvider } from '@cloudbeaver/core-di';
 import { NotificationService } from '@cloudbeaver/core-events';
-import { AsyncTaskInfoService } from '@cloudbeaver/core-root';
+import { AsyncTaskInfoEventHandler, AsyncTaskInfoService } from '@cloudbeaver/core-root';
 import { GraphQLService } from '@cloudbeaver/core-sdk';
 import {
   DatabaseDataAccessMode,
   DatabaseDataModel,
-  DatabaseEditAction,
   DataViewerDataChangeConfirmationService,
   DataViewerService,
   DataViewerSettingsService,
+  IDatabaseDataEditAction,
   type IDatabaseDataModel,
   TableViewerStorageService,
 } from '@cloudbeaver/plugin-data-viewer';
@@ -27,8 +27,9 @@ import type { IResultGroup, ISqlEditorTabState } from '../ISqlEditorTabState.js'
 import { QueryDataSource } from '../QueryDataSource.js';
 import { SqlDataSourceService } from '../SqlDataSource/SqlDataSourceService.js';
 import { SqlQueryResultService } from './SqlQueryResultService.js';
-import { SqlEditorSettingsService } from '../SqlEditorSettingsService.js';
 import { Executor, type IExecutor } from '@cloudbeaver/core-executor';
+import { CommonDialogService } from '@cloudbeaver/core-dialogs';
+import { SqlEditorPermissionService } from '../SqlEditorPermissionService.js';
 
 interface IQueryExecutionOptions {
   onQueryExecutionStart?: (query: string, index: number) => void;
@@ -43,7 +44,23 @@ export interface IQueryExecutionStatistics {
   modelId: string | null;
 }
 
-@injectable()
+@injectable(() => [
+  IServiceProvider,
+  TableViewerStorageService,
+  GraphQLService,
+  NotificationService,
+  ConnectionInfoResource,
+  ConnectionExecutionContextService,
+  SqlQueryResultService,
+  AsyncTaskInfoService,
+  DataViewerDataChangeConfirmationService,
+  DataViewerService,
+  SqlDataSourceService,
+  DataViewerSettingsService,
+  CommonDialogService,
+  AsyncTaskInfoEventHandler,
+  SqlEditorPermissionService,
+])
 export class SqlQueryService {
   private readonly statisticsMap: Map<string, IQueryExecutionStatistics>;
   readonly onQueryExecution: IExecutor<ISqlEditorTabState>;
@@ -61,7 +78,9 @@ export class SqlQueryService {
     private readonly dataViewerService: DataViewerService,
     private readonly sqlDataSourceService: SqlDataSourceService,
     private readonly dataViewerSettingsService: DataViewerSettingsService,
-    private readonly sqlEditorSettingsService: SqlEditorSettingsService,
+    private readonly commonDialogService: CommonDialogService,
+    private readonly asyncTaskInfoEventHandler: AsyncTaskInfoEventHandler,
+    private readonly sqlEditorPermissionService: SqlEditorPermissionService,
   ) {
     this.statisticsMap = new Map();
     this.onQueryExecution = new Executor();
@@ -124,10 +143,6 @@ export class SqlQueryService {
     try {
       const dataSource = this.sqlDataSourceService.get(editorState.editorId);
 
-      if (!this.sqlEditorSettingsService.scriptExecutionEnabled) {
-        throw new Error('Script execution is not allowed');
-      }
-
       const contextInfo = dataSource?.executionContext;
       const executionContext = contextInfo && this.connectionExecutionContextService.get(contextInfo.id);
 
@@ -136,15 +151,25 @@ export class SqlQueryService {
         return;
       }
 
-      let model: IDatabaseDataModel<QueryDataSource>;
-
       const connectionKey = createConnectionParam(contextInfo.projectId, contextInfo.connectionId);
+
+      if (!this.sqlEditorPermissionService.isScriptExecutionEnabled(connectionKey)) {
+        throw new Error('Script execution is not allowed');
+      }
+
+      let model: IDatabaseDataModel<QueryDataSource>;
 
       const connectionInfo = await this.connectionInfoResource.load(connectionKey);
       tabGroup = this.sqlQueryResultService.getSelectedGroup(editorState);
 
       if (inNewTab || !tabGroup) {
-        source = new QueryDataSource(this.serviceProvider, this.graphQLService, this.asyncTaskInfoService);
+        source = new QueryDataSource(
+          this.serviceProvider,
+          this.commonDialogService,
+          this.asyncTaskInfoEventHandler,
+          this.graphQLService,
+          this.asyncTaskInfoService,
+        );
         model = this.tableViewerStorageService.add(new DatabaseDataModel(source));
         this.dataViewerDataChangeConfirmationService.trackTableDataUpdate(model.id);
         tabGroup = this.sqlQueryResultService.createGroup(editorState, model.id, query);
@@ -171,7 +196,8 @@ export class SqlQueryService {
           constraints: [],
           whereFilter: '',
           readLogs: isOutputLogsTabOpened,
-        });
+        })
+        .resetQueryParameters();
 
       this.sqlQueryResultService.updateGroupTabs(editorState, model, tabGroup.groupId, true);
 
@@ -198,10 +224,6 @@ export class SqlQueryService {
     try {
       const dataSource = this.sqlDataSourceService.get(editorState.editorId);
 
-      if (!this.sqlEditorSettingsService.scriptExecutionEnabled) {
-        throw new Error('Script execution is not allowed');
-      }
-
       const contextInfo = dataSource?.executionContext;
       const executionContext = contextInfo && this.connectionExecutionContextService.get(contextInfo.id);
 
@@ -210,8 +232,13 @@ export class SqlQueryService {
         return;
       }
 
-      const groupNameOrder = this.sqlQueryResultService.getGroupNameOrder(editorState);
       const connectionKey = createConnectionParam(contextInfo.projectId, contextInfo.connectionId);
+
+      if (!this.sqlEditorPermissionService.isScriptExecutionEnabled(connectionKey)) {
+        throw new Error('Script execution is not allowed');
+      }
+
+      const groupNameOrder = this.sqlQueryResultService.getGroupNameOrder(editorState);
 
       const connectionInfo = await this.connectionInfoResource.load(connectionKey);
 
@@ -239,7 +266,13 @@ export class SqlQueryService {
         options?.onQueryExecutionStart?.(query, i);
 
         if (!model || !source) {
-          source = new QueryDataSource(this.serviceProvider, this.graphQLService, this.asyncTaskInfoService);
+          source = new QueryDataSource(
+            this.serviceProvider,
+            this.commonDialogService,
+            this.asyncTaskInfoEventHandler,
+            this.graphQLService,
+            this.asyncTaskInfoService,
+          );
           model = this.tableViewerStorageService.add(new DatabaseDataModel(source));
           this.dataViewerDataChangeConfirmationService.trackTableDataUpdate(model.id);
         }
@@ -259,7 +292,8 @@ export class SqlQueryService {
             constraints: [],
             whereFilter: '',
             readLogs: isOutputLogsTabOpened,
-          });
+          })
+          .resetQueryParameters();
 
         try {
           await model.setCountGain(this.dataViewerSettingsService.getDefaultRowsCount()).setSlice(0).request();
@@ -323,7 +357,7 @@ export class SqlQueryService {
       if (stage === 'request') {
         const activeGroupId = this.sqlQueryResultService.getSelectedGroup(editorState)?.groupId;
         for (const result of model.source.getResults()) {
-          const editor = model.source.getActionImplementation(result, DatabaseEditAction);
+          const editor = model.source.tryGetAction(result, IDatabaseDataEditAction);
 
           const edited = editor?.isEdited() && model.source.executionContext?.context;
 

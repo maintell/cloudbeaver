@@ -20,6 +20,7 @@ import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.model.impl.preferences.AbstractUserPreferenceStore;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
+import org.jkiss.utils.CommonUtils;
 
 import java.io.IOException;
 import java.util.Map;
@@ -62,12 +63,12 @@ public class WebSessionPreferenceStore extends AbstractUserPreferenceStore {
     }
 
     @Override
-    public String getDefaultString(String name) {
+    public String getDefaultString(@NotNull String name) {
         return parentStore.getDefaultString(name);
     }
 
     @Override
-    public boolean isDefault(String name) {
+    public boolean isDefault(@NotNull String name) {
         return !userPreferences.containsKey(name) && parentStore.isDefault(name);
     }
 
@@ -77,12 +78,21 @@ public class WebSessionPreferenceStore extends AbstractUserPreferenceStore {
     }
 
     @Override
-    public void setToDefault(String name) {
+    public void setToDefault(@NotNull String name) {
         throw new RuntimeException("Not implemented");
     }
 
     @Override
     public void save() throws IOException {
         throw new RuntimeException("Not implemented");
+    }
+
+    public boolean getUserPreferenceBoolean(@NotNull String name, boolean fallbackValue) {
+        String value = CommonUtils.toString(userPreferences.get(name));
+        if (value.isEmpty()) {
+            return fallbackValue;
+        } else {
+            return toBoolean(value);
+        }
     }
 }

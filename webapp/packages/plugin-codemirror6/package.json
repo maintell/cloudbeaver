@@ -2,15 +2,17 @@
   "name": "@cloudbeaver/plugin-codemirror6",
   "type": "module",
   "sideEffects": [
+    "./lib/module.js",
+    "./lib/index.js",
     "src/**/*.css",
-    "src/**/*.scss",
     "public/**/*"
   ],
   "version": "0.1.0",
   "description": "",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./module": "./lib/module.js"
   },
   "scripts": {
     "build": "tsc -b",
@@ -24,6 +26,7 @@
     "@cloudbeaver/core-localization": "workspace:*",
     "@cloudbeaver/core-theming": "workspace:*",
     "@cloudbeaver/core-utils": "workspace:*",
+    "@cloudbeaver/plugin-tailwindcss-theme": "workspace:*",
     "@codemirror/autocomplete": "^6",
     "@codemirror/commands": "^6",
     "@codemirror/lang-html": "^6",
@@ -32,11 +35,12 @@
     "@codemirror/lang-sql": "^6",
     "@codemirror/lang-xml": "^6",
     "@codemirror/language": "^6",
+    "@codemirror/lint": "^6",
     "@codemirror/merge": "^6",
-    "@codemirror/search": "^6",
+    "@codemirror/search": "6.6.0",
     "@codemirror/state": "^6",
     "@codemirror/view": "^6",
-    "@dbeaver/ui-kit": "workspace:^",
+    "@dbeaver/ui-kit": "workspace:*",
     "@lezer/common": "^1",
     "@lezer/highlight": "^1",
     "mobx": "^6",
@@ -50,6 +54,7 @@
     "@cloudbeaver/tsconfig": "workspace:*",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "rimraf": "^6",
     "typescript": "^5",
     "typescript-plugin-css-modules": "^5"
   }

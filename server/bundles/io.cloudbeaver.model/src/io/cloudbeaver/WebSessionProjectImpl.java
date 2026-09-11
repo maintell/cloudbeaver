@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2025 DBeaver Corp and others
+ * Copyright (C) 2010-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,52 +16,54 @@
  */
 package io.cloudbeaver;
 
+import io.cloudbeaver.model.WebConnectionConfig;
 import io.cloudbeaver.model.WebConnectionInfo;
 import io.cloudbeaver.model.session.WebSession;
 import io.cloudbeaver.utils.WebDataSourceUtils;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBPAdaptable;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
+import org.jkiss.dbeaver.model.DBPObjectSettingsProvider;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistry;
 import org.jkiss.dbeaver.model.app.DBPDataSourceRegistryCache;
+import org.jkiss.dbeaver.model.auth.SMObjectType;
 import org.jkiss.dbeaver.model.navigator.DBNModel;
 import org.jkiss.dbeaver.model.rm.RMProject;
 import org.jkiss.dbeaver.model.rm.RMUtils;
+import org.jkiss.dbeaver.model.security.SMControllerUtils;
 import org.jkiss.dbeaver.model.websocket.event.datasource.WSDataSourceEvent;
+import org.jkiss.dbeaver.model.websocket.event.datasource.WSDataSourceProperty;
 import org.jkiss.dbeaver.registry.DataSourceDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceRegistry;
+import org.jkiss.dbeaver.registry.project.BaseProjectSettings;
 import org.jkiss.dbeaver.runtime.jobs.DisconnectJob;
+import org.jkiss.utils.CommonUtils;
 
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Collectors;
 
-public class WebSessionProjectImpl extends WebProjectImpl {
+public class WebSessionProjectImpl extends WebProjectImpl implements DBPAdaptable {
     private static final Log log = Log.getLog(WebSessionProjectImpl.class);
+
     protected final WebSession webSession;
     private final Map<String, WebConnectionInfo> connections = new HashMap<>();
+    private final BaseProjectSettings projectSettings;
     private boolean registryIsLoaded = false;
 
     public WebSessionProjectImpl(
         @NotNull WebSession webSession,
         @NotNull RMProject project
     ) {
-        super(
-            webSession.getWorkspace(),
-            webSession.getRmController(),
-            webSession.getSessionContext(),
-            project,
-            webSession.getUserPreferenceStore(),
-            RMUtils.getProjectPath(project)
-        );
-        this.webSession = webSession;
+        this(webSession, project, null);
     }
 
     public WebSessionProjectImpl(
         @NotNull WebSession webSession,
         @NotNull RMProject project,
-        @NotNull Path path
+        @Nullable Path path
     ) {
         super(
             webSession.getWorkspace(),
@@ -69,15 +71,50 @@ public class WebSessionProjectImpl extends WebProjectImpl {
             webSession.getSessionContext(),
             project,
             webSession.getUserPreferenceStore(),
-            path
+            path == null ? RMUtils.getProjectPath(project) : path
         );
         this.webSession = webSession;
+        this.projectSettings = new BaseProjectSettings(this) {
+            @NotNull
+            @Override
+            protected Map<SMObjectType, Map<String, Map<String, String>>> loadAllProjectSettings() throws DBException {
+                if (webSession.getUser() == null) {
+                    return new LinkedHashMap<>();
+                }
+                return SMControllerUtils.getObjectSettingsMap(WebSessionProjectImpl.this, webSession.getSecurityController());
+            }
+
+            @Override
+            protected void saveProjectSettings(
+                @NotNull SMObjectType objectType,
+                @NotNull String objectId,
+                @NotNull Map<String, String> settings
+            ) throws DBException {
+                if (webSession.getUserContext().isNonAnonymousUserAuthorizedInSM()) {
+                    webSession.getSecurityController().setObjectSettings(getId(), objectType, objectId, settings);
+                }
+            }
+
+        };
     }
 
-    @Nullable
+    @NotNull
+    public BaseProjectSettings getProjectSettings() {
+        return projectSettings;
+    }
+
+    @NotNull
     @Override
     public DBNModel getNavigatorModel() {
         return webSession.getNavigatorModel();
+    }
+
+    @Override
+    public <T> T getAdapter(@NotNull Class<T> adapter) {
+        if (adapter == DBPObjectSettingsProvider.class) {
+            return adapter.cast(projectSettings);
+        }
+        return null;
     }
 
     @NotNull
@@ -98,8 +135,11 @@ public class WebSessionProjectImpl extends WebProjectImpl {
         if (registryIsLoaded) {
             return;
         }
-        getDataSourceRegistry().getDataSources().forEach(this::addConnection);
-        Throwable lastError = getDataSourceRegistry().getLastError();
+        DBPDataSourceRegistry dataSourceRegistry = getDataSourceRegistry();
+        // Connection node paths are resolved through the navigator model, so materialize its lazy database branch first.
+        webSession.initializeProjectNavigator(this);
+        dataSourceRegistry.getDataSources().forEach(this::addConnection);
+        Throwable lastError = dataSourceRegistry.getLastError();
         if (lastError != null) {
             webSession.addSessionError(lastError);
             log.error("Error refreshing connections from project '" + getId() + "'", lastError);
@@ -156,7 +196,7 @@ public class WebSessionProjectImpl extends WebProjectImpl {
      */
     @NotNull
     public synchronized WebConnectionInfo addConnection(@NotNull DBPDataSourceContainer dataSourceContainer) {
-        WebConnectionInfo connection = new WebConnectionInfo(webSession, dataSourceContainer);
+        WebConnectionInfo connection = createConnectionInfo(dataSourceContainer);
         synchronized (connections) {
             connections.put(dataSourceContainer.getId(), connection);
         }
@@ -181,6 +221,7 @@ public class WebSessionProjectImpl extends WebProjectImpl {
      *
      * @return connections from cache.
      */
+    @NotNull
     public List<WebConnectionInfo> getConnections() {
         if (!registryIsLoaded) {
             addDataSourcesToCache();
@@ -194,43 +235,50 @@ public class WebSessionProjectImpl extends WebProjectImpl {
     /**
      * updates data sources based on event in web session
      *
-     * @param dataSourceIds list of updated connections
-     * @param eventId  id of event
+     * @param event data source updated event
      */
-    public synchronized boolean updateProjectDataSources(@NotNull List<String> dataSourceIds, @NotNull String eventId) {
+    public synchronized boolean updateProjectDataSources(@NotNull WSDataSourceEvent event) {
         var sendDataSourceUpdatedEvent = false;
         DBPDataSourceRegistry registry = getDataSourceRegistry();
-        // save old connections
-        var oldDataSources = dataSourceIds.stream()
-            .map(registry::getDataSource)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toMap(
-                DBPDataSourceContainer::getId,
-                registry::createDataSource)
-            );
-        if (WSDataSourceEvent.CREATED.equals(eventId) || WSDataSourceEvent.UPDATED.equals(eventId)) {
-            registry.refreshConfig(dataSourceIds);
+        Map<String, DataSourceDescriptor> dataSourceSnapshots = new HashMap<>();
+        if (WSDataSourceEvent.UPDATED.equals(event.getId())) {
+            for (String dsId : event.getDataSourceIds()) {
+                DBPDataSourceContainer dataSource = registry.getDataSource(dsId);
+                if (dataSource instanceof DataSourceDescriptor descriptor) {
+                    DBPDataSourceContainer snapshot = registry.createDataSource(descriptor);
+                    if (snapshot instanceof DataSourceDescriptor snapshotDescriptor) {
+                        dataSourceSnapshots.put(dsId, snapshotDescriptor);
+                    }
+                }
+            }
         }
-        for (String dsId : dataSourceIds) {
+        if (WSDataSourceEvent.CREATED.equals(event.getId()) || WSDataSourceEvent.UPDATED.equals(event.getId())) {
+            registry.refreshConfig(event.getDataSourceIds());
+        }
+        for (String dsId : event.getDataSourceIds()) {
             DataSourceDescriptor ds = (DataSourceDescriptor) registry.getDataSource(dsId);
             if (ds == null) {
                 continue;
             }
-            switch (eventId) {
+            switch (event.getId()) {
                 case WSDataSourceEvent.CREATED -> {
                     addConnection(ds);
                     sendDataSourceUpdatedEvent = true;
                 }
                 case WSDataSourceEvent.UPDATED ->  {
-                    boolean connectionUpdated = !ds.equalSettings(oldDataSources.get(dsId));
-                    if (connectionUpdated) {
-                        sendDataSourceUpdatedEvent = true;
-                        WebDataSourceUtils.disconnectDataSource(webSession, ds);
+                    DataSourceDescriptor snapshot = dataSourceSnapshots.get(dsId);
+                    if (snapshot != null && !event.getProperty().hasEffectiveChanges(snapshot, ds)) {
+                        continue;
                     }
-                    // if settings were changed we need to send event
+                    if (event.getProperty() == WSDataSourceProperty.CONFIGURATION) {
+                        WebDataSourceUtils.disconnectDataSource(webSession, ds, true);
+                    }
+                    if (event.getProperty() != WSDataSourceProperty.INTERNAL) {
+                        sendDataSourceUpdatedEvent = true;
+                    }
                 }
                 case WSDataSourceEvent.DELETED -> {
-                    WebDataSourceUtils.disconnectDataSource(webSession, ds);
+                    WebDataSourceUtils.disconnectDataSource(webSession, ds, false);
                     if (registry instanceof DBPDataSourceRegistryCache dsrc) {
                         dsrc.removeDataSourceFromList(ds);
                     }
@@ -243,4 +291,107 @@ public class WebSessionProjectImpl extends WebProjectImpl {
         }
         return sendDataSourceUpdatedEvent;
     }
+
+    @NotNull
+    public WebConnectionInfo createConnectionInfo(@NotNull DBPDataSourceContainer dataSourceDescriptor) {
+        return new WebConnectionInfo(webSession, dataSourceDescriptor);
+    }
+
+    @NotNull
+    public WebConnectionInfo createConnection(@NotNull Map<String, Object> configMap) throws DBWebException {
+        if (CommonUtils.isEmpty(configMap)) {
+            throw new DBWebException("Connection configuration parameters are missing");
+        }
+        DBPDataSourceContainer newDataSource = getDataSourceContainerFromInput(getConnectionConfigInput(configMap));
+        return addDataSourceToProject(newDataSource);
+    }
+
+    @NotNull
+    public WebConnectionInfo addDataSourceToProject(@NotNull DBPDataSourceContainer newDataSource) throws DBWebException {
+        DBPDataSourceRegistry registry = getDataSourceRegistry();
+        try {
+            registry.addDataSource(newDataSource);
+            registry.checkForErrors();
+        } catch (DBException e) {
+            registry.removeDataSource(newDataSource);
+            throw new DBWebException("Failed to create connection", e);
+        }
+
+        WebConnectionInfo connectionInfo = addConnection(newDataSource);
+        webSession.addInfoMessage("New connection was created - " + WebDataSourceUtils.getConnectionContainerInfo(
+            newDataSource));
+        log.info(String.format(
+            "New connection was created: [info=%s, user=%s]",
+            WebDataSourceUtils.getConnectionContainerInfo(newDataSource),
+            webSession.getUserId()
+        ));
+        return connectionInfo;
+    }
+
+    @NotNull
+    public WebConnectionInfo updateConnection(@Nullable Map<String, Object> configMap) throws DBWebException {
+        WebConnectionConfig config = getConnectionConfigInput(configMap);
+        WebConnectionInfo connectionInfo = getWebConnectionInfo(config.getConnectionId());
+        DataSourceDescriptor dataSource = (DataSourceDescriptor) connectionInfo.getDataSourceContainer();
+        webSession.addInfoMessage("Update connection - " + WebDataSourceUtils.getConnectionContainerInfo(dataSource));
+
+        DBPDataSourceRegistry registry = getDataSourceRegistry();
+        getInputConfigHandler(config).updateDataSource(dataSource);
+        connectionInfo.setCredentialsSavedInSession(null);
+        try {
+            registry.updateDataSource(dataSource);
+            registry.checkForErrors();
+        } catch (DBException e) {
+            throw new DBWebException("Failed to update connection", e);
+        }
+        return connectionInfo;
+    }
+
+    public boolean deleteConnection(@NotNull String connectionId) throws DBWebException {
+        WebConnectionInfo connectionInfo = getWebConnectionInfo(connectionId);
+        webSession.addInfoMessage("Delete connection - " +
+            WebDataSourceUtils.getConnectionContainerInfo(connectionInfo.getDataSourceContainer()));
+        closeAndDeleteConnection(connectionInfo);
+
+        log.info(String.format(
+            "Connection deleted: [info=%s, userId=%s]",
+            WebDataSourceUtils.getConnectionContainerInfo(connectionInfo.getDataSourceContainer()),
+            webSession.getUserId()
+        ));
+        return true;
+    }
+
+    @NotNull
+    private WebConnectionInfo closeAndDeleteConnection(@NotNull WebConnectionInfo connectionInfo) throws DBWebException {
+        DBPDataSourceContainer dataSourceContainer = connectionInfo.getDataSourceContainer();
+        WebDataSourceUtils.disconnectDataSource(webSession, dataSourceContainer, false);
+        DBPDataSourceRegistry registry = getDataSourceRegistry();
+        registry.removeDataSource(dataSourceContainer);
+        removeConnection(dataSourceContainer);
+        return connectionInfo;
+    }
+
+    @NotNull
+    public DataSourceDescriptor getDataSourceContainerFromInput(@NotNull WebConnectionConfig configInput) throws DBWebException {
+        return getInputConfigHandler(configInput).createDataSourceContainer();
+    }
+
+    public void updateDataSourceContainerFromInput(
+        @NotNull WebConnectionConfig configInput,
+        @NotNull DataSourceDescriptor dataSource
+    ) throws DBWebException {
+        getInputConfigHandler(configInput).updateDataSource(dataSource);
+    }
+
+    @NotNull
+    public WebConnectionConfig getConnectionConfigInput(@Nullable Map<String, Object> configMap) {
+        return new WebConnectionConfig(configMap == null ? Map.of() : configMap);
+    }
+
+    @NotNull
+    protected WebConnectionConfigInputHandler getInputConfigHandler(@NotNull WebConnectionConfig configInput) {
+        return new WebConnectionConfigInputHandler<>(webSession, getDataSourceRegistry(), configInput);
+    }
+
+
 }

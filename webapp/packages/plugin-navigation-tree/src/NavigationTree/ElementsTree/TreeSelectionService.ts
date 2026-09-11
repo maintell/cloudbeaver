@@ -22,7 +22,7 @@ interface ISelectedNode {
 
 type NodeIdGetter = (projectId: string) => string;
 
-@injectable()
+@injectable(() => [NavNodeInfoResource, ProjectsService, ProjectsNavNodeService])
 export class TreeSelectionService {
   constructor(
     private readonly navNodeInfoResource: NavNodeInfoResource,
@@ -69,7 +69,7 @@ export class TreeSelectionService {
 
     return {
       projectId: project.id,
-      folderId: selectedFolderNode?.id,
+      folderId: selectedFolderNode?.uri,
       projectNodeId: nodeIdGetter(project.id),
       selectProject: false,
     };
@@ -83,7 +83,7 @@ export class TreeSelectionService {
       return;
     }
 
-    return this.projectsNavNodeService.getByNodeId(projectNode.id);
+    return this.projectsNavNodeService.getByNodeId(projectNode.uri);
   }
 
   private getParents(tree: IElementsTree): NavNode[] {

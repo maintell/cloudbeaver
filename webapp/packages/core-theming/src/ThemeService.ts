@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,29 @@ import { type ISyncExecutor, SyncExecutor } from '@cloudbeaver/core-executor';
 
 import type { Style } from './ComponentStyle.js';
 import './styles/main/base.pure.css';
-import './styles/main/color.pure.scss';
-import './styles/main/elevation.pure.scss';
+import './styles/main/color.pure.css';
 import './styles/main/fonts.pure.css';
+import './styles/theme-utilities.css';
 // TODO: important to keep normalize first
 import './styles/main/normalize.pure.css';
-import './styles/main/typography.pure.scss';
 import './styles/UiIconButton.css';
 import './styles/UiSpinner.css';
 import './styles/UiInput.css';
+import './styles/UISearch.css';
+import './styles/UiPopover.css';
+import './styles/UiColorPicker.css';
+import './styles/UiSwitch.css';
+import './styles/form-controls.css';
 import { FALLBACK_THEME_ID, themes } from './themes.js';
 import { ThemeSettingsService } from './ThemeSettingsService.js';
+
+export type ThemeType = 'light' | 'dark';
 
 export interface ITheme {
   name: string;
   id: string;
   class: string;
-  type?: 'light' | 'dark';
+  type: ThemeType;
   loaded: boolean;
   loader: () => Promise<void>;
 }
@@ -39,7 +45,7 @@ export interface IStyleRegistry {
   styles: Style[];
 }
 
-@injectable()
+@injectable(() => [ThemeSettingsService])
 export class ThemeService extends Bootstrap {
   get themes(): ITheme[] {
     return Array.from(this.themeMap.values());
@@ -49,11 +55,11 @@ export class ThemeService extends Bootstrap {
     return this.themeSettingsService.theme;
   }
 
-  get currentTheme(): ITheme {
-    let theme = this.themeMap.get(this.themeId);
+  get currentTheme(): ITheme | null {
+    let theme = this.themeMap.get(this.themeId) || null;
 
     if (!theme) {
-      theme = this.themeMap.get(FALLBACK_THEME_ID)!;
+      theme = this.themeMap.get(FALLBACK_THEME_ID) || null;
     }
 
     return theme;
@@ -61,8 +67,8 @@ export class ThemeService extends Bootstrap {
 
   readonly onChange: ISyncExecutor<ITheme>;
 
-  private readonly stylesRegistry: Map<Style, IStyleRegistry[]> = new Map();
-  private readonly themeMap: Map<string, ITheme> = new Map();
+  private readonly stylesRegistry: Map<Style, IStyleRegistry[]>;
+  private readonly themeMap: Map<string, ITheme>;
   private reactionDisposer: IReactionDisposer | null;
 
   constructor(private readonly themeSettingsService: ThemeSettingsService) {
@@ -70,6 +76,8 @@ export class ThemeService extends Bootstrap {
 
     this.reactionDisposer = null;
     this.onChange = new SyncExecutor();
+    this.stylesRegistry = new Map();
+    this.themeMap = new Map();
 
     makeObservable<ThemeService, 'themeMap'>(this, {
       themes: computed,
@@ -87,10 +95,10 @@ export class ThemeService extends Bootstrap {
   }
 
   override register(): void {
-    this.loadAllThemes();
+    this.registerDefaultThemes();
     this.reactionDisposer = reaction(
       () => this.currentTheme,
-      theme => this.loadTheme(theme.id),
+      theme => theme && this.loadTheme(theme.id),
       {
         fireImmediately: true,
       },
@@ -143,7 +151,9 @@ export class ThemeService extends Bootstrap {
       return;
     }
     await this.setTheme(themeId);
-    this.onChange.execute(this.currentTheme);
+    if (this.currentTheme) {
+      this.onChange.execute(this.currentTheme);
+    }
   }
 
   private async setTheme(themeId: string): Promise<void> {
@@ -165,7 +175,7 @@ export class ThemeService extends Bootstrap {
     }
   }
 
-  private loadAllThemes(): void {
+  private registerDefaultThemes(): void {
     for (const theme of themes) {
       this.themeMap.set(theme.id, theme);
     }

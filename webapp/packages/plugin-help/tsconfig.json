@@ -8,6 +8,15 @@
   },
   "references": [
     {
+      "path": "../../common-react/@dbeaver/react-tests"
+    },
+    {
+      "path": "../../common-react/@dbeaver/ui-kit"
+    },
+    {
+      "path": "../../common-typescript/@dbeaver/cli"
+    },
+    {
       "path": "../core-app"
     },
     {
@@ -35,6 +44,9 @@
       "path": "../core-localization"
     },
     {
+      "path": "../core-root"
+    },
+    {
       "path": "../core-routing"
     },
     {
@@ -44,7 +56,7 @@
       "path": "../core-view"
     },
     {
-      "path": "../plugin-data-spreadsheet-new"
+      "path": "../plugin-data-viewer"
     },
     {
       "path": "../plugin-navigation-tabs"
@@ -59,18 +71,23 @@
       "path": "../plugin-sql-editor"
     },
     {
+      "path": "../plugin-sql-editor-execution-plan"
+    },
+    {
       "path": "../plugin-sql-editor-navigation-tab-script"
     },
     {
       "path": "../plugin-top-app-bar"
+    },
+    {
+      "path": "../tests-runner"
     }
   ],
   "include": [
     "__custom_mocks__/**/*",
     "src/**/*",
     "src/**/*.json",
-    "src/**/*.css",
-    "src/**/*.scss"
+    "src/**/*.css"
   ],
   "exclude": [
     "**/node_modules",

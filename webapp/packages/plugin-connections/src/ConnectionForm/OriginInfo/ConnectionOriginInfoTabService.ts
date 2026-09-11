@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@ import { Bootstrap, injectable } from '@cloudbeaver/core-di';
 
 import { ConnectionFormService } from '../ConnectionFormService.js';
 import { importLazyComponent } from '@cloudbeaver/core-blocks';
-import { CachedMapAllKey, getCachedMapResourceLoaderState } from '@cloudbeaver/core-resource';
+import { getCachedMapResourceLoaderState } from '@cloudbeaver/core-resource';
 import { getConnectionFormOptionsPart } from '../Options/getConnectionFormOptionsPart.js';
 export const ConnectionFormAuthenticationAction = importLazyComponent(() =>
   import('./ConnectionFormAuthenticationAction.js').then(m => m.ConnectionFormAuthenticationAction),
@@ -20,7 +20,7 @@ export const ConnectionFormAuthenticationAction = importLazyComponent(() =>
 const OriginInfo = importLazyComponent(() => import('./OriginInfo.js').then(m => m.OriginInfo));
 const OriginInfoTab = importLazyComponent(() => import('./OriginInfoTab.js').then(m => m.OriginInfoTab));
 
-@injectable()
+@injectable(() => [ConnectionFormService, ConnectionInfoOriginResource])
 export class ConnectionOriginInfoTabService extends Bootstrap {
   constructor(
     private readonly connectionFormService: ConnectionFormService,
@@ -32,10 +32,20 @@ export class ConnectionOriginInfoTabService extends Bootstrap {
   override register(): void {
     this.connectionFormService.parts.add({
       key: 'origin',
-      order: 3,
+      icon: '/icons/plugin_connection_globe.svg',
+      order: 5,
       tab: () => OriginInfoTab,
       panel: () => OriginInfo,
-      getLoader: () => getCachedMapResourceLoaderState(this.connectionInfoOriginResource, () => CachedMapAllKey),
+      getLoader: (context, props) => {
+        const optionsPart = props?.formState ? getConnectionFormOptionsPart(props.formState) : null;
+        const key = optionsPart?.connectionKey;
+
+        if (!key) {
+          return [];
+        }
+
+        return getCachedMapResourceLoaderState(this.connectionInfoOriginResource, () => key);
+      },
       isHidden: (tabId, props) => {
         const optionsPart = props?.formState ? getConnectionFormOptionsPart(props.formState) : null;
         const key = optionsPart?.connectionKey;

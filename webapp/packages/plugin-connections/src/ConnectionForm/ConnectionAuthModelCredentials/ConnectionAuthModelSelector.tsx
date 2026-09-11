@@ -1,13 +1,13 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
  */
 import { observer } from 'mobx-react-lite';
 
-import { Combobox, usePermission, useResource } from '@cloudbeaver/core-blocks';
+import { Select, usePermission, useResource, useTranslate } from '@cloudbeaver/core-blocks';
 import { DatabaseAuthModelsResource } from '@cloudbeaver/core-connections';
 import { CachedResourceListEmptyKey, resourceKeyList } from '@cloudbeaver/core-resource';
 import { EAdminPermission } from '@cloudbeaver/core-root';
@@ -31,6 +31,7 @@ export const ConnectionAuthModelSelector = observer<Props>(function ConnectionAu
   disabled,
 }) {
   const adminPermission = usePermission(EAdminPermission.admin);
+  const t = useTranslate();
 
   const authModelsLoader = useResource(
     ConnectionAuthModelSelector,
@@ -45,7 +46,7 @@ export const ConnectionAuthModelSelector = observer<Props>(function ConnectionAu
   }
 
   return (
-    <Combobox
+    <Select
       value={authModelCredentialsState.authModelId}
       items={availableAuthModels}
       keySelector={model => model.id}
@@ -53,9 +54,12 @@ export const ConnectionAuthModelSelector = observer<Props>(function ConnectionAu
       titleSelector={model => model.description}
       readOnly={readonly || readonlyAuthModelId}
       disabled={disabled}
+      aria-label={t('plugin_connections_connection_form_part_main_auth_model')}
       tiny
       fill
       onSelect={onAuthModelChange}
-    />
+    >
+      {t('plugin_connections_connection_form_part_main_auth_model')}
+    </Select>
   );
 });

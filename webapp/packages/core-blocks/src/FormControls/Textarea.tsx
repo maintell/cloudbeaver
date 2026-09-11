@@ -23,24 +23,26 @@ import { FieldDescription } from './FieldDescription.js';
 import { FieldLabel } from './FieldLabel.js';
 import { FormContext } from './FormContext.js';
 import textareaStyle from './Textarea.module.css';
+import { useMergeRefs } from '../useMergeRefs.js';
 
 type BaseProps = Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange' | 'style'> &
   ILayoutSizeProps & {
-    description?: string;
+    ref?: React.Ref<HTMLTextAreaElement | null>;
+    description?: React.ReactNode;
     labelTooltip?: string;
     embedded?: boolean;
     cursorInitiallyAtEnd?: boolean;
     uploadable?: boolean;
   };
 
-type ControlledProps = BaseProps & {
+export type TextareaControlledProps = BaseProps & {
   name?: string;
   value?: string;
   onChange?: (value: string, name?: string) => any;
   state?: never;
 };
 
-type ObjectProps<TKey extends keyof TState, TState> = BaseProps & {
+export type TextareaObjectProps<TKey extends keyof TState, TState> = BaseProps & {
   name: TKey;
   state: TState;
   onChange?: (value: string, name: TKey) => any;
@@ -48,11 +50,12 @@ type ObjectProps<TKey extends keyof TState, TState> = BaseProps & {
 };
 
 interface TextareaType {
-  (props: ControlledProps): React.JSX.Element;
-  <TKey extends keyof TState, TState>(props: ObjectProps<TKey, TState>): React.JSX.Element;
+  (props: TextareaControlledProps): React.JSX.Element;
+  <TKey extends keyof TState, TState>(props: TextareaObjectProps<TKey, TState>): React.JSX.Element;
 }
 
 export const Textarea: TextareaType = observer(function Textarea({
+  ref,
   name,
   value: controlledValue,
   state,
@@ -67,10 +70,11 @@ export const Textarea: TextareaType = observer(function Textarea({
   onKeyDown,
   onChange = () => {},
   ...rest
-}: ControlledProps | ObjectProps<any, any>) {
+}: TextareaControlledProps | TextareaObjectProps<any, any>) {
   const translate = useTranslate();
   const inputId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const mergedRef = useMergeRefs(...[textareaRef, ref!].filter(Boolean));
   const layoutProps = getLayoutProps(rest);
   rest = filterLayoutFakeProps(rest);
   const styles = useS(textareaStyle);
@@ -108,7 +112,7 @@ export const Textarea: TextareaType = observer(function Textarea({
       </FieldLabel>
       <textarea
         {...rest}
-        ref={textareaRef}
+        ref={mergedRef}
         id={inputId}
         required={required}
         className={s(styles, { textarea: true })}
@@ -139,7 +143,7 @@ export const Textarea: TextareaType = observer(function Textarea({
             }
           }}
         >
-          <Button className="tw:inline-flex" tag="div" disabled={rest.disabled || rest.readOnly} variant="secondary">
+          <Button className="tw:w-max" tag="div" disabled={rest.disabled || rest.readOnly} variant="secondary">
             {translate('ui_file')}
           </Button>
         </UploadArea>

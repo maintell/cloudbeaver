@@ -23,7 +23,7 @@ import { ExtensionUtils } from '@cloudbeaver/core-extensions';
 import { LocalizationService } from '@cloudbeaver/core-localization';
 import { DATA_CONTEXT_NAV_NODE, EObjectFeature, NodeManagerUtils } from '@cloudbeaver/core-navigation-tree';
 import { type ISessionAction, sessionActionContext, SessionActionService } from '@cloudbeaver/core-root';
-import { ACTION_RENAME, ActionService, menuExtractItems, MenuService, ViewService } from '@cloudbeaver/core-view';
+import { ACTION_OPEN, ACTION_RENAME, ActionService, menuExtractItems, MenuService, ViewService } from '@cloudbeaver/core-view';
 import { MENU_CONNECTIONS } from '@cloudbeaver/plugin-connections';
 import { NavigationTabsService } from '@cloudbeaver/plugin-navigation-tabs';
 import {
@@ -53,7 +53,21 @@ interface IActiveConnectionContext {
   schemaId?: string;
 }
 
-@injectable()
+@injectable(() => [
+  SqlEditorNavigatorService,
+  NavigationTabsService,
+  ViewService,
+  ActionService,
+  MenuService,
+  SessionActionService,
+  CommonDialogService,
+  SqlEditorTabService,
+  SqlDataSourceService,
+  ConnectionInfoResource,
+  SqlEditorService,
+  LocalizationService,
+  SqlEditorSettingsService,
+])
 export class SqlEditorBootstrap extends Bootstrap {
   constructor(
     private readonly sqlEditorNavigatorService: SqlEditorNavigatorService,
@@ -81,12 +95,7 @@ export class SqlEditorBootstrap extends Bootstrap {
       contexts: [DATA_CONTEXT_SQL_EDITOR_STATE, DATA_CONTEXT_SQL_EDITOR_TAB],
       getItems: (context, items) => [...items, ACTION_RENAME],
       orderItems: (context, items) => {
-        const actions = menuExtractItems(items, [ACTION_RENAME]);
-
-        if (actions.length > 0) {
-          items.unshift(...actions);
-        }
-
+        items.unshift(...menuExtractItems(items, [ACTION_RENAME]));
         return items;
       },
     });
@@ -104,10 +113,15 @@ export class SqlEditorBootstrap extends Bootstrap {
         return true;
       },
       getItems: (context, items) => [...items, ACTION_SQL_EDITOR_OPEN],
+      orderItems: (context, items) => {
+        items.unshift(...menuExtractItems(items, [ACTION_OPEN, ACTION_SQL_EDITOR_OPEN]));
+        return items;
+      },
     });
 
     this.actionService.addHandler({
       id: 'sql-editor',
+      actions: [ACTION_RENAME, ACTION_SQL_EDITOR_OPEN],
       isActionApplicable: (context, action) => {
         switch (action) {
           case ACTION_RENAME: {
@@ -146,7 +160,7 @@ export class SqlEditorBootstrap extends Bootstrap {
             const name = getSqlEditorName(state, dataSource, connection);
             const regexp = /^(.*?)(\.\w+)$/gi.exec(name);
 
-            const result = await this.commonDialogService.open(RenameDialog, {
+            const { status, result } = await this.commonDialogService.open(RenameDialog, {
               name: regexp?.[1] ?? name,
               objectName: name,
               icon: dataSource.icon,
@@ -156,7 +170,7 @@ export class SqlEditorBootstrap extends Bootstrap {
                 ) && dataSource.canRename(name),
             });
 
-            if (result !== DialogueStateResult.Rejected && result !== DialogueStateResult.Resolved) {
+            if (status === DialogueStateResult.Resolved && result !== undefined) {
               dataSource.setName((result ?? '').trim());
             }
             break;
@@ -188,10 +202,9 @@ export class SqlEditorBootstrap extends Bootstrap {
       menus: [MENU_APP_ACTIONS],
       getItems: (context, items) => [...items, ACTION_SQL_EDITOR_NEW],
       orderItems: (context, items) => {
-        let placeIndex = items.indexOf(ACTION_SQL_EDITOR_NEW);
-
         const actionsOpen = menuExtractItems(items, [ACTION_SQL_EDITOR_NEW]);
 
+        let placeIndex = items.indexOf(ACTION_SQL_EDITOR_NEW);
         const connectionsIndex = items.indexOf(MENU_CONNECTIONS);
 
         if (connectionsIndex !== -1) {
@@ -230,6 +243,7 @@ export class SqlEditorBootstrap extends Bootstrap {
 
         return {
           ...action.info,
+          label: '',
           tooltip,
         };
       },

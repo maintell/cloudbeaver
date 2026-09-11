@@ -1,6 +1,6 @@
 /*
  * CloudBeaver - Cloud Database Manager
- * Copyright (C) 2020-2025 DBeaver Corp and others
+ * Copyright (C) 2020-2026 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0.
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,19 @@ export type SelectBaseProps<TKey, TValue> = Omit<
     description?: string;
     placeholder?: string;
     keySelector?: (item: TValue, index: number) => TKey;
+    serializedKeySelector?: (key: TKey) => string;
     valueSelector?: (item: TValue) => string;
     titleSelector?: (item: TValue) => string | undefined;
     iconSelector?: (item: TValue) => string | React.ReactElement | undefined;
     isDisabled?: (item: TValue) => boolean;
+    isSeparator?: (item: TValue) => boolean;
     onSwitch?: (state: boolean) => void;
     inline?: boolean;
     children?: string;
+    portal?: boolean;
+    overflowPadding?: number;
+    headerItems?: TValue[];
+    footerItems?: TValue[];
   };
 
 type ControlledProps<TKey, TValue> = SelectBaseProps<TKey, TValue> & {
@@ -54,17 +60,19 @@ type ObjectProps<TValue, TKey extends keyof TState, TState> = SelectBaseProps<TS
   value?: never;
 };
 
-export interface SelectType {
+export interface ISelectType {
   <TKey, TValue>(props: ControlledProps<TKey, TValue>): React.JSX.Element;
   <TValue, TKey extends keyof TState, TState>(props: ObjectProps<TValue, TKey, TState>): React.JSX.Element;
 }
 
-export const Select: SelectType = observer(function Select({
+export const Select: ISelectType = observer(function Select({
   value: controlledValue,
   defaultValue,
   name,
   state,
   items,
+  portal = false,
+  overflowPadding,
   loading,
   children,
   title,
@@ -74,12 +82,16 @@ export const Select: SelectType = observer(function Select({
   inline,
   description,
   placeholder,
+  headerItems,
+  footerItems,
   id,
   keySelector = v => v,
   valueSelector = v => v,
+  serializedKeySelector,
   iconSelector,
   titleSelector,
   isDisabled,
+  isSeparator,
   onSelect,
   onSwitch,
   ...rest
@@ -146,9 +158,11 @@ export const Select: SelectType = observer(function Select({
 
   function itemRender(item: (typeof items)[number]): React.ReactNode {
     return (
-      <div className="select__item" title={item ? titleSelector?.(item) : undefined}>
+      <div className="select__item">
         {renderIcon(item)}
-        <span>{valueSelector(item)}</span>
+        <span className="tw:truncate tw:min-w-0" title={titleSelector?.(item) ?? valueSelector(item)}>
+          {valueSelector(item)}
+        </span>
       </div>
     );
   }
@@ -170,7 +184,7 @@ export const Select: SelectType = observer(function Select({
   }
 
   return (
-    <Field {...layoutProps} className={clsx('select__field', inline && 'select__field--inline', className)}>
+    <Field {...layoutProps} className={clsx(inline && 'select__field--inline', className)}>
       {children && (
         <FieldLabel htmlFor={inputId} required={rest.required} title={title} className="select__field-label">
           {children}
@@ -178,13 +192,19 @@ export const Select: SelectType = observer(function Select({
       )}
       <SelectField
         {...rest}
+        portal={portal}
+        overflowPadding={overflowPadding}
         items={items}
         value={value}
         id={inputId}
         aria-label={children || title}
         itemValue={itemValue}
+        itemValueSerialized={serializedKeySelector}
         itemRender={itemRender}
         itemDisabled={itemDisabled}
+        isSeparator={isSeparator}
+        headerItems={headerItems}
+        footerItems={footerItems}
         name={name}
         disabled={disabled || readOnly}
         noItemsPlaceholder={translate('combobox_no_results_placeholder')}
